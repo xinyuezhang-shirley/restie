@@ -26,6 +26,7 @@ import type { HobbyIcon } from '@/data/types';
 import { daysBetween, dayKey, now } from '@/lib/time';
 import { useSky, type Condition } from '@/world/world';
 
+import { hashOf, subtitleFor } from './subtitles';
 import { blockAt, clockLabel, msOfDay, planDay, PLACES, type Block, type Place, type SpotKey } from './life';
 import { activityLine, lines, pick } from './personality';
 import type { PoseKey } from './rig';
@@ -131,36 +132,6 @@ export interface Brain {
   goToBed: () => void;
   /** arrow keys: a few steps that way */
   nudge: (dir: 'up' | 'down' | 'left' | 'right') => void;
-}
-
-const HOBBY_DOING: Record<string, string> = {
-  drawing: 'Rusty is painting by the window',
-  baking: 'Rusty is mixing something at the desk',
-  guitar: 'Rusty is practicing guitar (mostly purring)',
-  reading: 'Rusty is reading in his bed',
-  writing: 'Rusty is writing in his notebook',
-  gardening: 'Rusty is checking on his little plant',
-  other: 'Rusty is working on a little project',
-};
-
-/** The subtitle for what he's doing. */
-function doingLine(kind: string, pose: PoseKey, spot: Where, icon: HobbyIcon | undefined, condition: Condition): string {
-  if (kind === 'tour') return 'Rusty is waiting to meet you';
-  if (kind === 'asked' && pose === 'sleep') return 'Rusty is napping in his bed (you said so)';
-  if (kind === 'asked') return 'Rusty came over where you tapped';
-  if (kind === 'hobby' && icon) return HOBBY_DOING[icon] ?? HOBBY_DOING.other;
-  if (pose === 'paint') return HOBBY_DOING.drawing;
-  if (pose === 'cook') return HOBBY_DOING.baking;
-  if (pose === 'wave') return 'Rusty is waving hello';
-  if (kind === 'sleep') return 'Rusty is asleep. It’s late.';
-  if (pose === 'sleep') return 'Rusty is napping in his bed';
-  if (kind === 'window' || (spot === 'window' && pose === 'sit')) {
-    const w = { clear: 'the sky', cloudy: 'the clouds', fog: 'the fog', rain: 'the rain', snow: 'the snow', storm: 'the storm' }[condition];
-    return `Rusty is watching ${w} out the window`;
-  }
-  if (pose === 'think') return spot === 'bed' ? 'Rusty is daydreaming in his bed' : 'Rusty is daydreaming';
-  if (spot === 'door') return 'Rusty is sitting by the door, listening';
-  return 'Rusty is lounging on the rug';
 }
 
 /** Little moments, narrated for a few seconds. */
@@ -482,12 +453,10 @@ export function useRustyBrain(visible: boolean, paused = false): Brain {
   );
   const goToBed = useCallback(() => {
     if (!visible || paused || away) return;
-    if (block.pose === 'sleep' && block.spot === 'bed') {
-      say('(he’s already curled up. zzz.)', 2500);
-      return;
-    }
+    // (already asleep there: he stays asleep for the nap you asked for)
+    const already = block.pose === 'sleep' && block.spot === 'bed';
     setHold({ pose: 'sleep', spot: 'bed', until: Date.now() + 3 * 60_000, asked: true });
-    say(pick(['a nap? you don’t have to ask twice.', 'bedtime! just a short one.', 'okay… five more minutes. or fifty.']), 3000);
+    say(already ? '(he’s already curled up. zzz.)' : pick(['a nap? you don’t have to ask twice.', 'bedtime! just a short one.', 'okay… five more minutes. or fifty.']), 3000);
   }, [visible, paused, away, block.pose, block.spot, say]);
   const nudge = useCallback(
     (dir: 'up' | 'down' | 'left' | 'right') => {
@@ -527,7 +496,17 @@ export function useRustyBrain(visible: boolean, paused = false): Brain {
         ? `Rusty is out exploring · back around ${clockLabel(trip.end)}`
         : block.key === 'returning'
           ? 'Rusty just got back, and he brought something'
-          : (moment ?? doingLine(block.kind, block.pose, block.spot, block.icon, condition)),
+          : (moment ??
+            subtitleFor({
+              kind: block.kind,
+              pose: block.pose,
+              spot: block.spot,
+              icon: block.icon,
+              condition,
+              phase,
+              // a new line every ~2 minutes within an activity (stable in between)
+              seed: hashOf(block.key) + Math.floor(clock / 130_000),
+            })),
     pet,
     poke,
     say,

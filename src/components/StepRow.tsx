@@ -87,7 +87,7 @@ export function StepRow({
           <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space.sm }}>
             {number != null && (
               <View style={[styles.num, done && { backgroundColor: colors.successSurface }]}>
-                <T v="caption" style={{ fontSize: 11, lineHeight: 14 }} color={done ? colors.successText : colors.actionText}>
+                <T v="label" style={{ fontSize: 13, lineHeight: 16 }} color={done ? colors.successText : colors.actionText}>
                   {number}
                 </T>
               </View>
@@ -129,7 +129,7 @@ const styles = StyleSheet.create({
     minHeight: 60,
   },
   flat: { backgroundColor: 'transparent', borderWidth: 0, paddingHorizontal: 0, paddingVertical: space.sm, minHeight: 52 },
-  num: { minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 5, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFE8D9', marginTop: 1 },
+  num: { minWidth: 22, height: 22, borderRadius: 11, paddingHorizontal: 5, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFE8D9', marginTop: 1 },
   box: {
     width: 28,
     height: 28,

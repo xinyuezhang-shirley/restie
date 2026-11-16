@@ -16,10 +16,11 @@ import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useEffect, useRef, useState, type ComponentRef } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeOut, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming, ZoomIn, type SharedValue } from 'react-native-reanimated';
+import Animated, { Easing, FadeOut, useAnimatedStyle, useReducedMotion, withDelay, useSharedValue, withRepeat, withSequence, withTiming, ZoomIn, type SharedValue } from 'react-native-reanimated';
 
 import { Icon } from '@/components/Icon';
 import { KeepsakeImage } from '@/components/KeepsakeImage';
+import { useArtUrl } from '@/ai/art';
 import { tap } from '@/components/ui';
 import type { HobbyIcon, Keepsake } from '@/data/types';
 import { freePlace, spotAt, type Brain } from '@/rusty/brain';
@@ -51,6 +52,8 @@ interface Props {
   stepCount: number;
   /** each hobby's home and how far it has grown */
   homes: Partial<Record<HobbyIcon, 1 | 2 | 3>>;
+  /** Rusty's drawing (kept by you) for a hobby with no built-in object: stands in the "other" spot */
+  otherArt?: string | null;
   pinned: Keepsake[];
   news: 'checkin' | 'skip' | null;
   onHobbies: () => void;
@@ -93,6 +96,7 @@ export function Room(p: Props) {
   // The room's own easel / bowl step aside while his drawing holds his own.
   const inUse: Partial<Record<HobbyIcon, boolean>> = { drawing: p.brain.base === 'paint', baking: p.brain.base === 'cook' };
   const wash = roomWash(phase, condition);
+  const otherUrl = useArtUrl(p.otherArt);
 
   const roomRef = useRef<ComponentRef<typeof View>>(null);
   // Where you sent him: a paw print that fades when he gets going.
@@ -182,6 +186,7 @@ export function Room(p: Props) {
           stage={p.homes[icon]!}
           k={k}
           hidden={!!inUse[icon]}
+          art={icon === 'other' ? otherUrl : null}
           phase={phase}
           condition={condition}
           onPress={() =>
@@ -288,6 +293,8 @@ export function Room(p: Props) {
           accessibilityHint: 'Tap to pet him. Press and hold to talk or check in.',
         }}
       >
+        {/* asleep: little z's drift up from his head */}
+        {p.brain.base === 'sleep' && !p.brain.reaction && !p.brain.away && <Zzz size={puppetSize} />}
         {/* Always-visible shortcut to his menu (same as holding him), so
             talking to Rusty is recognizable, not recalled (eval #21):
             "!" when he has news, a speech bubble otherwise. */}
@@ -353,6 +360,31 @@ function Subtitle({ text, k }: { text: string; k: number }) {
       </View>
     </Animated.View>
   );
+}
+
+/** Sleeping: three z's float up and fade, one after another, forever (still for Reduce Motion). */
+function Zzz({ size }: { size: number }) {
+  const reduce = useReducedMotion();
+  return (
+    <View pointerEvents="none" style={{ position: 'absolute', left: size * 0.06, top: -size * 0.02 }} accessible={false}>
+      {[0, 1, 2].map((i) => (
+        <Zee key={i} delay={i * 1100} size={18 + i * 5} still={reduce} index={i} />
+      ))}
+    </View>
+  );
+}
+
+function Zee({ delay, size, still, index }: { delay: number; size: number; still: boolean; index: number }) {
+  const t = useSharedValue(still ? 0.5 + index * 0.2 : 0);
+  useEffect(() => {
+    if (still) return;
+    t.value = withDelay(delay, withRepeat(withTiming(1, { duration: 3300, easing: Easing.out(Easing.quad) }), -1, false));
+  }, [delay, still, t]);
+  const style = useAnimatedStyle(() => ({
+    opacity: still ? 0.8 : t.value < 0.15 ? t.value / 0.15 : 1 - (t.value - 0.15) / 0.85,
+    transform: [{ translateX: 8 + t.value * 30 + Math.sin(t.value * 6) * 4 }, { translateY: -t.value * 64 }, { rotate: `${-12 + t.value * 14}deg` }],
+  }));
+  return <Animated.Text style={[styles.zee, { fontSize: size }, style]}>z</Animated.Text>;
 }
 
 /** The lamp-lit night painting over the day one, crossfading as the sun sets. */
@@ -429,6 +461,7 @@ function HobbyObject({
   stage,
   k,
   hidden,
+  art,
   phase,
   condition,
   onPress,
@@ -437,13 +470,16 @@ function HobbyObject({
   stage: 1 | 2 | 3;
   k: number;
   hidden: boolean;
+  /** a kept drawing replaces the built-in object (square, with margin) */
+  art?: string | null;
   phase: Phase;
   condition: Condition;
   onPress: () => void;
 }) {
   const home = HOMES[icon];
-  const h = home.h[stage - 1];
-  const w = h * OBJECT_ASPECT[icon][stage - 1];
+  // a drawing is a square with empty margin, so it gets a bigger box for the same visible size
+  const h = art ? Math.max(home.h[stage - 1], 70) * 1.5 : home.h[stage - 1];
+  const w = art ? h : h * OBJECT_ASPECT[icon][stage - 1];
   const o = useSharedValue(hidden ? 0 : 1);
   useEffect(() => {
     o.value = withTiming(hidden ? 0 : 1, { duration: 500 });
@@ -466,7 +502,7 @@ function HobbyObject({
         hitSlop={8}
         style={({ pressed }) => [StyleSheet.absoluteFill, pressed && { transform: [{ scale: 0.95 }] }]}
       >
-        <Image source={OBJECTS[icon][stage - 1]} style={StyleSheet.absoluteFill} contentFit="contain" accessible={false} />
+        <Image source={art ? { uri: art } : OBJECTS[icon][stage - 1]} style={StyleSheet.absoluteFill} contentFit="contain" accessible={false} />
       </Pressable>
     </Animated.View>
   );
@@ -612,6 +648,7 @@ function SpeechBubble({
 }
 
 const styles = StyleSheet.create({
+  zee: { position: 'absolute', left: 0, top: 0, fontFamily: fonts.heading, color: '#4F6F9A', textShadowColor: 'rgba(255,255,255,0.95)', textShadowRadius: 4 },
   mark: {
     position: 'absolute',
     width: 28,

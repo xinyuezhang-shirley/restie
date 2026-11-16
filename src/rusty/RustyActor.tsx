@@ -402,9 +402,14 @@ export const RustyActor = forwardRef<RustyPuppetHandle, ActorProps>(function Rus
     }
     frame.value = p.frames[i];
 
-    // sleeping: a slow breath on the held frame
+    // sleeping: slow, deep breaths: his back rises and settles (about
+    // 15 breaths a minute, a little longer out than in), feet stay put
     const s = sheet.value;
-    breath.value = s.active === SLEEP && n === 1 ? 1 + Math.sin(now / 900) * 0.012 : 1;
+    if (s.active === SLEEP && n === 1) {
+      const ph = (now % 4200) / 4200;
+      const b = ph < 0.42 ? 0.5 - Math.cos((ph / 0.42) * Math.PI) / 2 : 0.5 + Math.cos(((ph - 0.42) / 0.58) * Math.PI) / 2;
+      breath.value = 1 + b * 0.032;
+    } else breath.value = 1;
 
     // where his head is (badge + speech bubble follow it)
     let hx = pHead.value[0];
@@ -440,7 +445,8 @@ export const RustyActor = forwardRef<RustyPuppetHandle, ActorProps>(function Rus
   }));
   const spriteWrap = useAnimatedStyle(() => ({
     opacity: spriteO.value,
-    transform: [{ translateY: FOOT_Y * S * (1 - breath.value) }, { scaleY: breath.value }],
+    // scaled about his feet: the back swells up and a touch outward
+    transform: [{ translateY: FOOT_Y * S * (1 - breath.value) }, { scaleY: breath.value }, { scaleX: 1 + (breath.value - 1) * 0.3 }],
   }));
   const headAnchor = useAnimatedStyle(() => ({ left: headX.value * S, top: headY.value * S }));
 

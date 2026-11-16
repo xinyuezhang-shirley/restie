@@ -3,6 +3,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
 
+import { RustyDraws } from '@/components/HobbyArt';
 import { KeepsakeImage } from '@/components/KeepsakeImage';
 import { Sheet } from '@/components/Sheet';
 import { Button, Field, Row, T } from '@/components/ui';
@@ -24,7 +25,7 @@ export default function KeepsakeDetail() {
     <Sheet>
       <View style={{ alignItems: 'center', gap: space.sm }}>
         <View style={{ backgroundColor: colors.white, padding: 10, paddingBottom: 16, borderRadius: 6, borderWidth: 1, borderColor: colors.border }}>
-          {k.kind === 'note' && !k.sticker ? (
+          {k.kind === 'note' && !k.sticker && !k.artPath ? (
             <View style={{ width: 240, minHeight: 160, backgroundColor: '#FFF6DE', padding: space.md }}>
               <T>{k.note || k.caption}</T>
             </View>
@@ -66,6 +67,10 @@ export default function KeepsakeDetail() {
           {k.kind === 'rusty' ? (k.sticker === 'rusty-diary' ? ' · Rusty’s diary' : k.sticker === 'rusty-card' ? ' · a card from Rusty' : ' · from Rusty’s walk') : ''}
         </T>
       </View>
+      {/* no photo: Rusty can illustrate it (checked before he shows you) */}
+      {!k.photoPath && (
+        <RustyDraws kind="keepsake" targetId={k.id} subject={k.caption} detail={k.note ?? undefined} hasArt={!!k.artPath} canAsk />
+      )}
       <Button
         icon="pin"
         variant={k.pinned ? 'secondary' : 'primary'}

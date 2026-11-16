@@ -48,12 +48,13 @@ export const type = {
   headline: { fontFamily: fonts.bodyBold, fontSize: 17, lineHeight: 22, color: colors.ink },
   body: { fontFamily: fonts.body, fontSize: 17, lineHeight: 24, color: colors.ink },
   callout: { fontFamily: fonts.body, fontSize: 15, lineHeight: 20, color: colors.ink },
-  label: { fontFamily: fonts.bodySemi, fontSize: 13, lineHeight: 18, color: colors.ink },
-  caption: { fontFamily: fonts.body, fontSize: 13, lineHeight: 18, color: colors.inkSoft },
+  label: { fontFamily: fonts.bodySemi, fontSize: 14, lineHeight: 19, color: colors.ink },
+  // 14px minimum: the smallest text in the app must stay readable (13 was too small to read comfortably)
+  caption: { fontFamily: fonts.body, fontSize: 14, lineHeight: 19, color: colors.inkSoft },
   eyebrow: {
     fontFamily: fonts.bodyExtra,
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: 13,
+    lineHeight: 17,
     letterSpacing: 0.8,
     color: colors.actionText,
   },

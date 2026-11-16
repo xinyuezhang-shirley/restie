@@ -21,6 +21,7 @@ import { ago, greeting, whenLabel } from '@/lib/time';
 import { useWorld } from '@/world/world';
 
 import { knowledgeLines, preferredHour } from '@/rusty/knows';
+import { rustyNow } from '@/rusty/now';
 import { pick } from '@/rusty/personality';
 
 const TIMEOUT_MS = 15_000;
@@ -51,6 +52,7 @@ export function buildContext(): string {
       `${greeting(nowD).toLowerCase()} (${nowD.getHours()}:${`${nowD.getMinutes()}`.padStart(2, '0')}). ` +
       `Outside: ${w.condition}, ${w.tempF ?? '?'}°F, ${w.phase}.`,
   );
+  if (rustyNow.doing && Date.now() - rustyNow.at < 30 * 60_000) parts.push(`Right now you are: ${rustyNow.doing.replace(/^Rusty is /, '')}.`);
   const hobbies = hobbiesOf(s);
   if (hobbies.length) {
     parts.push(
@@ -94,9 +96,18 @@ export function buildContext(): string {
 
 /* --------------------------------------------------------------------- chat */
 
+export type ChatIntent = 'smalltalk' | 'did_something' | 'stuck' | 'plan' | 'new_hobby' | 'add_todo' | 'overwhelmed' | 'other';
+
 export interface ChatReply {
+  intent: ChatIntent;
   reply: string;
   suggestion: RustySuggestion | null;
+  /** "I just did X": what to log (matched to a real open step or hobby, by exact name) */
+  log: { step: string; hobby: string; what: string } | null;
+  /** "remind me to…": an everyday to-do */
+  todo: { title: string; when: 'today' | 'tomorrow' | 'weekend' | 'none' } | null;
+  /** "I want to try pottery": the new hobby's name */
+  newHobby: string;
   quickReplies: string[];
   /** new things worth remembering about the person (saved by the chat screen) */
   remember: string[];
@@ -105,14 +116,22 @@ export interface ChatReply {
 /** The card already offers "Do it now" / "Find a time", so agreeing chips would just repeat it. */
 const AGREE = /^(ok(ay)?|yes|yeah|sure|sounds good|let'?s (do it|go|start)|i'?m in|deal)\b/i;
 
-export async function chat(history: ChatMessage[], text: string): Promise<ChatReply> {
+/**
+ * @param expect what Rusty's last question set up ("new_hobby": the next
+ *               message names the hobby they want to start)
+ */
+export async function chat(history: ChatMessage[], text: string, expect?: 'new_hobby'): Promise<ChatReply> {
   const messages = history.slice(-16).map((m) => ({ role: m.role === 'rusty' ? 'assistant' : 'user', content: m.text }));
   const res = await call<{
+    intent: ChatIntent;
     reply: string;
     suggestion: { type: 'focus' | 'plan' | 'none'; title: string; minutes: number; hobby: string };
+    log?: { step: string; hobby: string; what: string };
+    todo?: { title: string; when: 'today' | 'tomorrow' | 'weekend' | 'none' };
+    newHobby?: string;
     quickReplies: string[];
     remember?: string[];
-  }>('chat', { messages, text });
+  }>('chat', { messages, text, expect });
   if (res?.reply) {
     const s = useStore.getState();
     const hobby = hobbiesOf(s).find((h) => h.name.toLowerCase() === res.suggestion?.hobby?.toLowerCase());
@@ -121,9 +140,19 @@ export async function chat(history: ChatMessage[], text: string): Promise<ChatRe
         ? { type: res.suggestion.type, title: res.suggestion.title, minutes: res.suggestion.minutes || 5, hobbyId: hobby?.id ?? null }
         : null;
     const quick = (res.quickReplies ?? []).filter((q) => !(suggestion && AGREE.test(q.trim()))).slice(0, 3);
-    return { reply: res.reply, suggestion, quickReplies: quick, remember: (res.remember ?? []).slice(0, 2) };
+    const intent = res.intent ?? 'other';
+    return {
+      intent,
+      reply: res.reply,
+      suggestion,
+      log: intent === 'did_something' && res.log && (res.log.step || res.log.hobby || res.log.what) ? res.log : null,
+      todo: intent === 'add_todo' && res.todo?.title ? res.todo : null,
+      newHobby: intent === 'new_hobby' ? (res.newHobby ?? '').trim() : '',
+      quickReplies: quick,
+      remember: (res.remember ?? []).slice(0, 2),
+    };
   }
-  return { ...offlineChat(text), remember: offlineRemember(text) };
+  return { log: null, todo: null, newHobby: '', ...offlineChat(text, expect), remember: offlineRemember(text) };
 }
 
 /**
@@ -164,7 +193,7 @@ export function chatStarters(): string[] {
 }
 
 /** Scripted Rusty for when the brain is offline (matches the med-fi script). */
-function offlineChat(text: string): Omit<ChatReply, 'remember'> {
+function offlineChat(text: string, expect?: 'new_hobby'): Partial<ChatReply> & Pick<ChatReply, 'intent' | 'reply' | 'suggestion' | 'quickReplies'> {
   const s = useStore.getState();
   const t = text.toLowerCase();
   const hobbies = hobbiesOf(s);
@@ -175,6 +204,46 @@ function offlineChat(text: string): Omit<ChatReply, 'remember'> {
     (due?.hobbyId ? s.hobbies[due.hobbyId] : undefined) ??
     [...hobbies].sort((a, b) => (a.lastDoneAt ?? '').localeCompare(b.lastDoneAt ?? ''))[0];
   const step = stale ? (progressOf(s, stale.id).current?.title ?? stale.goal ?? stale.name) : null;
+  // "pottery" (after "which hobby?"), or "I want to try pottery".
+  const wants = text.match(/\b(?:want to|wanna|would like to|'d like to)\s+(?:try|start|learn|get into|pick up)\s+([^.!?,]{2,40})/i);
+  if (expect === 'new_hobby' || wants) {
+    const name = offlineHobbies(wants ? wants[1] : text)[0]?.name ?? text;
+    return { intent: 'new_hobby', reply: `${name.toLowerCase()}! ooh. let’s set it up together, it only takes a minute.`, suggestion: null, quickReplies: [], newHobby: name };
+  }
+  // "I just practiced guitar" / "finished the chords".
+  if (/\b(i\s+(just\s+)?(did|finished|practiced|played|wrote|read|baked|painted|drew|sketched|went|made|cooked|ran|worked on|completed)|just (did|finished)|done with)\b/i.test(t)) {
+    const open = openTasks(s);
+    const words = (x: string) => x.toLowerCase().split(/\W+/).filter((w) => w.length > 3);
+    const said = new Set(words(t));
+    const hit = open
+      .map((o) => ({ o, n: words(o.title).filter((w) => said.has(w)).length }))
+      .sort((a, b) => b.n - a.n)[0];
+    const h = hobbies.find((x) => t.includes(x.name.toLowerCase()) || words(x.name).some((w) => said.has(w)));
+    const step2 = hit && hit.n > 0 ? hit.o : undefined;
+    return {
+      intent: 'did_something',
+      reply: pick(['you did it! I’m writing it down right now.', 'look at you go. logged, with a little paw print.', 'that counts! I put it in your log.']),
+      suggestion: null,
+      quickReplies: [],
+      log: { step: step2?.title ?? '', hobby: (step2?.hobbyId ? s.hobbies[step2.hobbyId]?.name : h?.name) ?? '', what: text.replace(/^i\s+(just\s+)?/i, '').slice(0, 60) },
+    };
+  }
+  // "remind me to do laundry tomorrow"
+  const remind = text.match(/\b(?:remind me to|i need to|add (?:a )?to-?do(?: to)?:?)\s+(.{3,60}?)(?:\s+(today|tomorrow|this weekend))?[.!?]?$/i);
+  if (remind) {
+    const when = (remind[2]?.toLowerCase().replace('this ', '') ?? 'none') as 'today' | 'tomorrow' | 'weekend' | 'none';
+    return { intent: 'add_todo', reply: 'got it. it’s on your list, so it’s not on your mind.', suggestion: null, quickReplies: [], todo: { title: titleCase(remind[1]), when } };
+  }
+  // "how's your day?" / "what are you doing?"
+  if (/how('?s| is| was) your day|what are you (doing|up to)|how are you|^(hi|hey|hello)\b/i.test(t)) {
+    const doing = rustyNow.doing.replace(/^Rusty is /, '').replace(/\.$/, '');
+    return {
+      intent: 'smalltalk',
+      reply: doing ? `I was ${doing}. very important work. how about you?` : pick(['I napped in the sunbeam, then I napped somewhere else. big day. how about you?', 'I found a crumb under the desk. that was the highlight. what about you?']),
+      suggestion: null,
+      quickReplies: [],
+    };
+  }
   // "I miss drawing": that hobby, one tiny step, today.
   const missed = /\bmiss\b/.test(t) ? hobbies.find((h) => t.includes(h.name.toLowerCase())) : undefined;
   if (missed) {
@@ -183,6 +252,7 @@ function offlineChat(text: string): Omit<ChatReply, 'remember'> {
       reply: `me too. let’s say hi to ${missed.name.toLowerCase()} again, tiny: ${tiny.toLowerCase()}. now, or later today?`,
       suggestion: { type: 'focus', title: tiny, minutes: 5, hobbyId: missed.id },
       quickReplies: ['Something smaller', 'What can wait today?'],
+      intent: 'stuck',
     };
   }
   if (/start|stuck|where|begin|procrast|motivat|can'?t|don'?t know/.test(t) && stale) {
@@ -191,6 +261,7 @@ function offlineChat(text: string): Omit<ChatReply, 'remember'> {
       reply: `let’s make it tiny. just ${tiny.toLowerCase()}. 5 minutes?`,
       suggestion: { type: 'focus', title: tiny, minutes: 5, hobbyId: stale.id },
       quickReplies: ['Maybe later', 'Something else'],
+      intent: 'stuck',
     };
   }
   if (/busy|tired|overwhelm|too much|stress|exhaust|can wait|wait today/.test(t)) {
@@ -201,6 +272,7 @@ function offlineChat(text: string): Omit<ChatReply, 'remember'> {
         : 'that sounds like a lot. rest counts too. want to do one 5-minute thing, or just hang out with me?',
       suggestion: null,
       quickReplies: ['Just hang out', 'One small thing'],
+      intent: 'overwhelmed',
     };
   }
   if (/day|you|doing|how are/.test(t)) {
@@ -211,7 +283,8 @@ function offlineChat(text: string): Omit<ChatReply, 'remember'> {
         'I found a crumb under the desk. that was the highlight. what about you?',
       ]),
       suggestion: null,
-      quickReplies: ['Pretty good', 'Kind of busy'],
+      quickReplies: [],
+      intent: 'smalltalk',
     };
   }
   if (/plan|week|schedule|time/.test(t) && stale) {
@@ -223,6 +296,7 @@ function offlineChat(text: string): Omit<ChatReply, 'remember'> {
       })(),
       suggestion: { type: 'plan', title: firstTinyStep(stale, step ?? stale.name), minutes: 10, hobbyId: stale.id },
       quickReplies: [],
+      intent: 'plan',
     };
   }
   return {
@@ -231,7 +305,8 @@ function offlineChat(text: string): Omit<ChatReply, 'remember'> {
       'okay! tell me more. I’m a very good listener (I have big ears).',
     ]),
     suggestion: null,
-    quickReplies: ['Don’t know where to start', 'I’m pretty busy', 'How was your day?'],
+    quickReplies: [],
+    intent: 'other',
   };
 }
 

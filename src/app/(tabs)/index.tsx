@@ -11,6 +11,7 @@ import { greeting, whenLabel } from '@/lib/time';
 import { Room } from '@/room/Room';
 import { useDailyRusty, useRustyBrain } from '@/rusty/brain';
 import { useMilestoneCards, useRustyJournal } from '@/rusty/journal';
+import { setRustyNow } from '@/rusty/now';
 import { colors, radius, shadows, space } from '@/theme/tokens';
 import { setTutorialHomeVisible, useAutoStartTutorial, useTutorial, useTutorialTarget } from '@/tutorial/tutorial';
 
@@ -35,6 +36,12 @@ export default function Home() {
   const touring = useTutorial((s) => s.active);
   const tourStep = useTutorial((s) => s.step);
   const brain = useRustyBrain(visible, touring);
+  // a kept drawing for one of your own hobbies stands in the room
+  const otherArt = useStore(
+    (s) => Object.values(s.hobbies).find((h) => !h.deletedAt && h.status === 'active' && h.icon === 'other' && h.artPath)?.artPath ?? null,
+  );
+  // his chat knows what he's up to ("I was just painting by the window")
+  useEffect(() => setRustyNow(brain.doing), [brain.doing]);
   useDailyRusty();
   useRustyJournal(visible && !touring, brain.say);
   useMilestoneCards();
@@ -85,6 +92,7 @@ export default function Home() {
           hobbyCount={hobbies.length}
           stepCount={stepCount}
           homes={homes}
+          otherArt={otherArt}
           pinned={pinned}
           news={news}
           onHobbies={() => router.navigate('/hobbies')}

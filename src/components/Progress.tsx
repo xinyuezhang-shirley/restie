@@ -60,7 +60,7 @@ export function SegmentBar({
       {numbered && (
         <View style={styles.row}>
           {steps.map((t, i) => (
-            <T key={t.id} v="caption" style={{ flex: 1, textAlign: 'center', fontSize: 11, lineHeight: 14 }} color={t.status === 'done' ? colors.successText : colors.inkSoft}>
+            <T key={t.id} v="caption" style={{ flex: 1, textAlign: 'center', fontSize: 13, lineHeight: 17 }} color={t.status === 'done' ? colors.successText : colors.inkSoft}>
               {i + 1}
             </T>
           ))}
@@ -85,7 +85,7 @@ export function SubstepDots({ subs }: { subs: Substep[] }) {
         <View key={s.id} style={[styles.dot, s.done && styles.dotDone]} />
       ))}
       {subs.length > shown.length && (
-        <T v="caption" style={{ fontSize: 11 }}>
+        <T v="caption" style={{ fontSize: 13 }}>
           +{subs.length - shown.length}
         </T>
       )}

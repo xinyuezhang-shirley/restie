@@ -1,7 +1,5 @@
-import { Image } from 'expo-image';
 import { View } from 'react-native';
 
-import { hobbyIcons } from '@/assets';
 import { lastWorked, ofCount, plannedFor } from '@/copy';
 import { nextStepOf, progressOf } from '@/data/selectors';
 import { useDerived } from '@/data/store';
@@ -9,12 +7,14 @@ import type { Hobby } from '@/data/types';
 import { ago, daysBetween } from '@/lib/time';
 import { colors, space } from '@/theme/tokens';
 
+import { HobbyArt, useOfferFor } from './HobbyArt';
 import { Card, ProgressBar, Row, T, Tag } from './ui';
 
 /** Hobby sticker, name, last activity, goal, milestone dots, what's next. */
 export function HobbyCard({ hobby, onPress }: { hobby: Hobby; onPress: () => void }) {
   const progress = useDerived((s) => progressOf(s, hobby.id), [hobby.id]);
   const next = useDerived((s) => nextStepOf(s, hobby.id), [hobby.id]);
+  const offer = useOfferFor(hobby.id);
   const isNew = daysBetween(new Date(hobby.createdAt), new Date()) < 1;
   const doneToday = hobby.lastDoneAt && daysBetween(new Date(hobby.lastDoneAt), new Date()) === 0;
   const label = `${hobby.name}. ${hobby.kind === 'goal' ? `Goal: ${hobby.goal}.` : ''} Last worked on ${ago(hobby.lastDoneAt)}.`;
@@ -30,7 +30,7 @@ export function HobbyCard({ hobby, onPress }: { hobby: Hobby; onPress: () => voi
       ]}
     >
       <View style={{ width: 64, height: 64, borderRadius: 16, backgroundColor: colors.muted, alignItems: 'center', justifyContent: 'center' }}>
-        <Image source={hobbyIcons[hobby.icon]} style={{ width: 50, height: 50 }} contentFit="contain" />
+        <HobbyArt hobby={hobby} size={50} />
       </View>
       <View style={{ flex: 1, gap: space.xs }}>
         {/* Name wraps (never runs off the card); tags sit after it; when you
@@ -39,6 +39,7 @@ export function HobbyCard({ hobby, onPress }: { hobby: Hobby; onPress: () => voi
           <T v="title2">{hobby.name}</T>
           {isNew && <Tag>New</Tag>}
           {hobby.status === 'paused' && <Tag color={colors.border}>Resting</Tag>}
+          {offer && <Tag color={colors.bubbleRusty}>Rusty drew something</Tag>}
         </Row>
         <T v="caption">{isNew && !hobby.lastDoneAt ? 'Started today' : lastWorked(ago(hobby.lastDoneAt))}</T>
         <T v="callout" color={colors.inkSoft} numberOfLines={2}>

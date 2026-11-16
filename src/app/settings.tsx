@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Alert, Platform, Switch, View } from 'react-native';
 
 import { Button, Card, Chip, ChipRow, Eyebrow, Field, NavBar, OptionRow, Row, Screen, T } from '@/components/ui';
+import { useArtStatus } from '@/ai/art';
 import { seedDemo } from '@/data/seed';
 import { patchProfile, resetLocal, showToast, useStore } from '@/data/store';
 import { wipeRemote } from '@/data/sync';
@@ -191,6 +192,7 @@ export default function Settings() {
           location.
         </T>
         <OptionRow title="What Rusty knows about you" meta="See, fix or forget what he keeps in mind" onPress={() => router.push('/knows')} />
+        <Paints />
       </Card>
       <T v="caption" center>
         Restie · CS 147 Autumn 2026 · Shirley Z. & Ziyu R.
@@ -224,5 +226,20 @@ function Toggle({ title, meta, value, onChange }: { title: string; meta: string;
         accessibilityLabel={title}
       />
     </Row>
+  );
+}
+
+/** Rusty's paints: how many drawings are left this month (no prices). */
+function Paints() {
+  const s = useArtStatus();
+  if (!supabase) return null;
+  return (
+    <T v="caption">
+      {!s
+        ? 'Rusty’s paints: checking…'
+        : s.configured
+          ? `🎨 Rusty’s paints: ${s.left} of ${s.cap} drawings left this month. He draws pictures for hobbies he doesn’t have art for, and can illustrate keepsakes. Every drawing is checked before you see it.`
+          : '🎨 Rusty’s drawings are off (no image model connected), so he uses his built-in art.'}
+    </T>
   );
 }

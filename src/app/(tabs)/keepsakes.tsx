@@ -26,7 +26,9 @@ export default function Keepsakes() {
   const [filter, setFilter] = useState<Filter>('all');
   const [adding, setAdding] = useState(false);
   const { width } = useWindowDimensions();
-  const tileW = (Math.min(width, 440) - space.lg * 2 - space.md) / 2;
+  // Two equal columns, measured from the grid itself (not guessed from the window).
+  const [gridW, setGridW] = useState(Math.min(width, 440) - space.lg * 2);
+  const tileW = Math.floor((gridW - space.md) / 2);
   const list = filter === 'all' ? all : all.filter((k) => k.kind === filter);
 
   const pickFromLibrary = async () => {
@@ -54,7 +56,7 @@ export default function Keepsakes() {
         ))}
       </ChipRow>
 
-      <View style={styles.grid}>
+      <View style={styles.grid} onLayout={(e) => setGridW(e.nativeEvent.layout.width)}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Add a keepsake"
@@ -62,7 +64,7 @@ export default function Keepsakes() {
             tap();
             setAdding(true);
           }}
-          style={({ pressed }) => [styles.add, { width: tileW, height: tileW * 1.25 }, pressed && { backgroundColor: colors.muted }]}
+          style={({ pressed }) => [styles.add, { width: tileW, minHeight: tileW * 1.25 }, pressed && { backgroundColor: colors.muted }]}
         >
           <Icon name="plus" size={32} color={colors.actionText} />
           <T v="headline" color={colors.actionText}>
@@ -128,22 +130,26 @@ function Tile({ k, w }: { k: Keepsake; w: number }) {
           <KeepsakeImage keepsake={k} style={{ width: '100%', height: '100%' }} />
         )}
       </View>
-      <T v="label" numberOfLines={2} style={{ marginTop: space.sm }}>
+      {/* readable at a glance: 16px caption, 15px date (eval #23: keepsakes were hard to see) */}
+      <T v="label" numberOfLines={3} style={{ marginTop: space.sm, fontSize: 16, lineHeight: 21 }}>
         {k.caption}
       </T>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <T v="caption">{ago(k.createdAt)}</T>
-        {k.pinned && <Icon name="pin" size={14} color={colors.action} />}
-        {k.kind === 'rusty' && <Icon name="paw" size={14} color={colors.accent} />}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, marginTop: 'auto', paddingTop: space.xs }}>
+        <T v="callout" color={colors.inkSoft} style={{ flex: 1 }}>
+          {ago(k.createdAt)}
+        </T>
+        {k.pinned && <Icon name="pin" size={18} color={colors.action} />}
+        {k.kind === 'rusty' && <Icon name="paw" size={18} color={colors.accent} />}
       </View>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.md },
+  // rows stretch, so the add tile and a keepsake beside it are always the same height
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.md, alignItems: 'stretch' },
   add: {
-    borderRadius: 12,
+    borderRadius: 8,
     borderWidth: 2,
     borderStyle: 'dashed',
     borderColor: '#E3C9AE',
@@ -156,7 +162,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     padding: 8,
     paddingBottom: 10,
-    borderRadius: 6,
+    borderRadius: 8,
     ...shadows.soft,
   },
 });

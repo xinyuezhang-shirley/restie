@@ -39,6 +39,8 @@ export interface Hobby extends Synced {
   status: 'active' | 'paused' | 'done';
   createdAt: ISO;
   lastDoneAt?: ISO | null;
+  /** Rusty's drawing for it (generated, kept by you): path in the `generated` bucket */
+  artPath?: string | null;
 }
 
 export interface Milestone extends Synced {
@@ -102,6 +104,8 @@ export interface Keepsake extends Synced {
   sticker?: string | null;
   pinned: boolean;
   createdAt: ISO;
+  /** Rusty's illustration of it (generated, kept by you) */
+  artPath?: string | null;
 }
 
 export interface Activity extends Synced {
@@ -159,10 +163,23 @@ export interface RustyMind {
   notes?: RustyNote[];
   /** ids of "I noticed" patterns you said aren't true, so he stops using them */
   hiddenNoticed?: string[];
+  /** drawings Rusty made that are waiting for you to keep or not */
+  artOffers?: ArtOffer[];
   /** cached AI lines for the day */
   lines?: { date: string; lines: string[] } | null;
   /** "Something's not right?" reports (synced with the profile for the team) */
   reports?: { at: ISO; kind: string; text: string; screen?: string }[];
+}
+
+export interface ArtOffer {
+  id: string;
+  kind: 'hobby' | 'keepsake';
+  /** the hobby or keepsake it's for */
+  targetId: string;
+  path: string;
+  /** what he drew, in a few words */
+  object: string;
+  at: ISO;
 }
 
 export interface RustyNote {

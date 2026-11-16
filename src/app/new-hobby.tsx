@@ -11,6 +11,7 @@ import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native
 import Animated, { FadeInUp } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { maybeDrawHobby } from '@/ai/art';
 import { suggestGoals, suggestPath, understandHobby, type HobbyGuess } from '@/ai/rusty';
 import { hobbyChoices, hobbyIcons, iconFor } from '@/assets';
 import { WhenPicker, type WhenValue } from '@/components/WhenPicker';
@@ -32,7 +33,8 @@ interface Msg {
 }
 
 export default function NewHobby() {
-  const { hobbyId } = useLocalSearchParams<{ hobbyId?: string }>();
+  // `text`: a hobby named in Rusty's chat ("I want to try pottery") starts the setup with it
+  const { hobbyId, text: fromChat } = useLocalSearchParams<{ hobbyId?: string; text?: string }>();
   const existing = useStore((s) => (hobbyId ? s.hobbies[hobbyId] : undefined));
   const insets = useSafeAreaInsets();
   const scroll = useRef<ComponentRef<typeof ScrollView>>(null);
@@ -85,6 +87,7 @@ export default function NewHobby() {
   const skip = () => {
     if (existing) return router.back();
     const h = createHobby({ name, icon, kind: 'keep', milestones: [] });
+    void maybeDrawHobby(h);
     showToast(`Added ${name}. Plan it whenever you like.`);
     router.replace(`/hobby/${h.id}`);
   };
@@ -165,7 +168,7 @@ export default function NewHobby() {
     // (skip any already added, e.g. after going back and picking another one first)
     const have = new Set(alive(useStore.getState().hobbies).map((h) => h.name.toLowerCase()));
     others = others.filter((o) => !have.has(o.name.toLowerCase()));
-    for (const o of others) createHobby({ name: o.name, icon: o.icon, kind: o.goal ? 'goal' : 'keep', goal: o.goal || undefined, milestones: [] });
+    for (const o of others) void maybeDrawHobby(createHobby({ name: o.name, icon: o.icon, kind: o.goal ? 'goal' : 'keep', goal: o.goal || undefined, milestones: [] }));
     const also = others.length ? ` I added ${others.map((o) => o.name).join(' and ')} to your hobbies too, so you can plan ${others.length > 1 ? 'them' : 'it'} later.` : '';
     if (g.goal) {
       setKind('goal');
@@ -226,7 +229,7 @@ export default function NewHobby() {
       const ms = kind === 'goal' && already === 0 ? path.map((t) => addMilestone(existing.id, t)) : [];
       addPromise({ hobbyId: existing.id, milestoneId: ms[0]?.id, title: first, dueAt: firstStep.dueAt, timed: firstStep.timed });
     } else {
-      createHobby({
+      const h = createHobby({
         name,
         icon,
         kind,
@@ -235,10 +238,20 @@ export default function NewHobby() {
         milestones: kind === 'goal' ? path : [],
         firstStep,
       });
+      void maybeDrawHobby(h);
     }
     showToast(withDay ? `🐾 Promised! ${name} is ready to grow.` : `${name} is saved. Give the first step a day anytime.`);
     router.dismissTo('/hobbies');
   };
+
+  // Came from Rusty's chat with a hobby already named: pick up from there.
+  const started = useRef(false);
+  useEffect(() => {
+    if (started.current || existing || !fromChat?.trim()) return;
+    started.current = true;
+    void understand(fromChat.trim());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const send = () => {
     const t = input.trim();
@@ -312,7 +325,7 @@ export default function NewHobby() {
             <Chip
               custom
               onPress={() => {
-                for (const g of many) createHobby({ name: g.name, icon: g.icon, kind: g.goal ? 'goal' : 'keep', goal: g.goal || undefined, milestones: [] });
+                for (const g of many) void maybeDrawHobby(createHobby({ name: g.name, icon: g.icon, kind: g.goal ? 'goal' : 'keep', goal: g.goal || undefined, milestones: [] }));
                 showToast(`Added ${many.length} hobbies. Plan each one whenever you like.`);
                 router.dismissTo('/hobbies');
               }}

@@ -17,19 +17,18 @@
  * Nothing completes by itself: when every step of a milestone is done, Rusty
  * asks whether the milestone is done. Every change has an Undo.
  */
-import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { suggestSteps } from '@/ai/rusty';
-import { hobbyIcons } from '@/assets';
 import { CheckinCard } from '@/components/CheckinCard';
 import { Icon } from '@/components/Icon';
 import { KeepsakeImage } from '@/components/KeepsakeImage';
 import { MilestoneReady } from '@/components/MilestoneReady';
 import { SegmentBar } from '@/components/Progress';
 import { StepRow } from '@/components/StepRow';
+import { HobbyArt, RustyDraws } from '@/components/HobbyArt';
 import { Button, Card, CHEVRON, Chip, ChipRow, Eyebrow, Field, IconButton, NavBar, ProgressBar, Row, Screen, T, Tag, tap } from '@/components/ui';
 import { lastWorked, ofCount, plannedFor, plural } from '@/copy';
 import {
@@ -103,11 +102,15 @@ export default function HobbyDetail() {
   };
 
   return (
-    <Screen nav={<NavBar title={hobby.name} backLabel="Hobbies" />} tab="hobbies">
+    <Screen nav={<NavBar backLabel="Hobbies" />} tab="hobbies">
+      {/* the hobby's name, in full, as the page title (names never get cut short) */}
+      <T v="display" accessibilityRole="header" style={{ marginTop: space.md }}>
+        {hobby.name}
+      </T>
       {/* Goal + overall progress */}
       <Card style={{ gap: space.md }}>
         <Row gap={space.md} style={{ alignItems: 'center' }}>
-          <Image source={hobbyIcons[hobby.icon]} style={{ width: 64, height: 64 }} contentFit="contain" />
+          <HobbyArt hobby={hobby} size={64} />
           <View style={{ flex: 1, gap: space.xs }}>
             <Eyebrow>{hobby.kind === 'goal' ? 'Goal' : 'Just for fun'}</Eyebrow>
             {editGoal ? (
@@ -151,6 +154,8 @@ export default function HobbyDetail() {
           </Pressable>
         )}
       </Card>
+      {/* Rusty's drawing for a hobby he has no picture for (or a new one, waiting for you) */}
+      <RustyDraws kind="hobby" targetId={hobby.id} subject={hobby.name} detail={hobby.goal ?? undefined} hasArt={!!hobby.artPath} canAsk={hobby.icon === 'other' || !!hobby.artPath} />
 
       {due && <CheckinCard task={due} compact />}
 

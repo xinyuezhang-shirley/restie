@@ -270,7 +270,7 @@ export const Eyebrow = ({ children, color }: { children: ReactNode; color?: stri
 export function Tag({ children, color = colors.tagNew }: { children: ReactNode; color?: string }) {
   return (
     <View style={[s.tag, { backgroundColor: color }]}>
-      <T v="label" style={{ fontSize: 12, lineHeight: 16 }}>
+      <T v="label" style={{ fontSize: 13, lineHeight: 17 }}>
         {children}
       </T>
     </View>

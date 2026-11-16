@@ -1,4 +1,20 @@
-# Prompt: Rusty's image generation (capped), new hobby icons and objects
+# Rusty's image generation (capped): new hobby pictures and keepsake illustrations
+
+> **Status (2026-11-16): built.** What's below was the original brief; it's implemented as:
+> - `supabase/functions/rusty-art`: plan (Claude) → draw (OpenAI `IMAGE_MODEL`, default `gpt-image-2.5-flare`, with the
+>   app's art from `public/style-refs/` as style references) → check (pixels + Claude: appropriate, relevant, logical,
+>   style, composition, room fit; pass = all ≥ 4, no text) → retry ≤ 2 with the problems fed back → store in the private
+>   `generated` bucket. Every attempt is logged in `generated_assets`; the cap is `image_usage` (`IMAGE_MONTHLY_CAP`, default 9, retries count).
+> - App: `src/ai/art.ts`, `src/components/HobbyArt.tsx`. New hobbies with no built-in picture get a drawing in the
+>   background; Rusty shows it on the hobby page (Keep it / Try again / Keep the basket). Kept drawings appear on hobby
+>   cards, the hobby page and in the room. Keepsakes without a photo: "Ask Rusty to illustrate this". Settings shows the budget.
+> - Tests: `python3 scripts/make-qa-images.py /tmp/qa && node --env-file=.env.local scripts/qa-art.mjs /tmp/qa`
+>   (3 real app icons must pass; white background, neon, text, wrong subject and too big must fail).
+> - **To turn it on:** add `OPENAI_API_KEY` in Supabase → Edge Functions → Secrets (optionally `IMAGE_MONTHLY_CAP`,
+>   `IMAGE_MODEL`, `IMAGE_QUALITY`). Without it everything uses the built-in art. To turn it off, remove the key.
+> - Not built from the brief: separate 3-stage growth drawings for the room (a kept drawing is one picture, shown at
+>   every stage), the shared cross-user cache, and compositing onto the room photo for the room-fit check (Claude judges
+>   room fit from the references instead).
 
 Paste everything below the line into a fresh coding agent session at the repo root. It assumes the backend from
 `docs/BACKEND-PROMPT.md` exists: anonymous auth, the `rusty` Edge Function, and the private storage bucket.

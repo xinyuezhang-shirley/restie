@@ -59,17 +59,35 @@ const MODES: Record<string, { schema: object; effort: 'low' | 'medium' | 'high';
   chat: {
     effort: 'low',
     schema: obj({
+      intent: {
+        type: 'string',
+        enum: ['smalltalk', 'did_something', 'stuck', 'plan', 'new_hobby', 'add_todo', 'overwhelmed', 'other'],
+      },
       reply: str,
       suggestion: obj({ type: { type: 'string', enum: ['focus', 'plan', 'none'] }, title: str, minutes: { type: 'integer' }, hobby: str }),
+      log: obj({ step: str, hobby: str, what: str }),
+      todo: obj({ title: str, when: { type: 'string', enum: ['today', 'tomorrow', 'weekend', 'none'] } }),
+      newHobby: str,
       quickReplies: strArr,
       remember: strArr,
     }),
     task: (b) =>
-      `The person just wrote: "${b.text}"
+      `The person just wrote: "${b.text}"${b.expect === 'new_hobby' ? '\n(You just asked which new hobby they want to start, so this message names it: intent is "new_hobby".)' : ''}
 
-Reply as Rusty in "reply". Use what you know (their list, what's due, what could wait, and "What you know about them") so the answer is specific to them, never generic. If they're stuck, unmotivated, or don't know where to start, shrink their current milestone into one tiny step (about 5 minutes, concrete, starts with a verb, under 8 words) and set suggestion.type "focus" (do it now with you) — or "plan" if they want to schedule it. Respect their known preferences (e.g. if they like evenings, plan for the evening). Put the hobby's exact name in suggestion.hobby. Otherwise suggestion.type is "none" with empty title/hobby and minutes 0.
-"quickReplies": 0–3 short, specific things the person might say next (2–6 words, in their voice), naming real items from their list when it helps (e.g. "What about problem set 6?"). When there's a suggestion, the card already has "Do it now" and "Find a time" buttons, so never offer agreeing replies like "okay, let's start"; offer alternatives instead.
-"remember": 0–2 new, durable facts about the person worth remembering for next time, learned from what they just wrote: preferences, energy patterns, constraints, what helps or doesn't (e.g. "Prefers to practice guitar in the evening", "Feels drained after work on Mondays", "Wants drawing to stay low-pressure"). Short, third person, no names. Only things they actually said or clearly implied; skip anything already in "What you know about them"; never store sensitive details (health conditions, relationships, money, location). Usually [].`,
+First decide "intent":
+- "smalltalk": chatting with you ("how's your day?", "what are you doing?", "hi"). Answer warmly as yourself, using what you're doing right now (see "Right now you are") and one small real detail (weather, time of day). Don't steer them to work. Leave everything else empty.
+- "did_something": they did or finished something ("I just practiced guitar", "finished the chords!", "went for a run"). Fill "log": "step" = the EXACT title of the matching open step from their list (or "" if none matches), "hobby" = the EXACT name of the matching hobby (or "" if it isn't one of their hobbies), "what" = a short past-tense description in their words (under 8 words). The app logs it for them right away, so in "reply" celebrate briefly and specifically ("you found the chords! I'll write it down.").
+- "stuck": they don't know where to start, can't get going, or something is in the way with a hobby. Shrink their current milestone into one tiny step (about 5 minutes, concrete, starts with a verb, under 8 words) as suggestion.type "focus".
+- "plan": they want to schedule or plan. suggestion.type "plan" with a tiny step; respect known preferences (e.g. evenings).
+- "new_hobby": they want to start or try a hobby they don't have yet. "newHobby" = its short name (1–3 words). Reply with excitement and say you can set it up together.
+- "add_todo": they want to remember an everyday task ("remind me to do laundry tomorrow"). Fill "todo" (title starts with a verb; "when" from their words, else "none").
+- "overwhelmed": too busy, tired, stressed. Be gentle; if "What could wait today" is listed, name it and one reason.
+- "other": anything else.
+For any field that doesn't apply: empty strings, minutes 0, suggestion.type "none".
+
+Always use what you know (their list, what's due, "What you know about them") so the reply is about them, never generic. Answer in 1–3 short sentences.
+"quickReplies": 0–3 short, specific things the person might say next (2–6 words, their voice), naming real items from their list when it helps. When there's a suggestion, the card already has "Do it now" and "Find a time" buttons, so don't offer agreeing replies like "okay, let's start". For smalltalk, return [] (the app shows its own choices).
+"remember": 0–2 new, durable facts about the person worth remembering (preferences, energy patterns, constraints, what helps), short, third person, no names, only what they said or clearly implied, not already in "What you know about them", nothing sensitive (health, relationships, money, location). Usually [].`,
   },
   hobby: {
     // What the person typed when adding a hobby: often a sentence, or several hobbies at once.
@@ -144,6 +162,8 @@ interface Body {
   goal?: string;
   milestone?: string;
   smallerThan?: string | null;
+  /** chat: what the last question set up (e.g. "new_hobby") */
+  expect?: string;
 }
 
 function json(data: unknown, status = 200) {

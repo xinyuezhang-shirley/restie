@@ -41,14 +41,19 @@ if [ "$WHAT" = all ] || [ "$WHAT" = supabase ]; then
       -d '{"external_anonymous_users_enabled":true}' "$API/config/auth" >/dev/null && echo "turned on"
   fi
 
-  step "Rusty's edge function"
-  sb functions deploy rusty --remote="$REF" --use-api
+  step "Rusty's edge functions (chat + drawings)"
+  sb functions deploy rusty rusty-art --remote="$REF" --use-api
 
   step "Secrets (names only)"
   if sb secrets list --remote="$REF" 2>/dev/null | grep -q ANTHROPIC_API_KEY; then
     echo "ANTHROPIC_API_KEY is set"
   else
     echo "⚠ ANTHROPIC_API_KEY is not set yet: Supabase → Edge Functions → Secrets. Rusty uses offline lines until then."
+  fi
+  if sb secrets list --remote="$REF" 2>/dev/null | grep -q OPENAI_API_KEY; then
+    echo "OPENAI_API_KEY is set (Rusty can draw)"
+  else
+    echo "ℹ OPENAI_API_KEY is not set: Rusty's drawings stay off (built-in art is used). Add it in Edge Functions → Secrets."
   fi
 
   step "App keys → .env.local"
