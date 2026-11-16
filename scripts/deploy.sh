@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Deploy Restie: Supabase (database, auth, Rusty's edge function) + the web app on Vercel.
+# (Vercel builds from GitHub main; this script sets its env vars and triggers a rebuild.)
 #
 #   1. Fill .env.deploy.local (project ref, db password, Supabase + Vercel tokens).
 #      The Anthropic key is set in Supabase → Edge Functions → Secrets, never here.
@@ -16,7 +17,6 @@ set -a; source .env.deploy.local; set +a
 WHAT="${1:-all}"
 
 sb() { npx -y supabase@3.1.0 "$@"; }
-vc() { npx -y vercel@65.16.0 "$@"; }
 step() { printf '\n\033[1m== %s\033[0m\n' "$*"; }
 need() { for v in "$@"; do [ -n "${!v:-}" ] || { echo "✗ $v is empty in .env.deploy.local"; exit 1; }; done; }
 
@@ -67,18 +67,11 @@ fi
 if [ "$WHAT" = all ] || [ "$WHAT" = web ]; then
   need VERCEL_TOKEN
   [ -f .env.local ] || { echo "✗ .env.local missing: deploy the backend first"; exit 1; }
-  export VERCEL_TOKEN
 
-  step "Web build (expo export, with .env.local)"
-  rm -rf dist
-  npx expo export -p web
-  # Static hosting: every route is the single-page app.
-  cat > dist/vercel.json <<'JSON'
-{ "cleanUrls": true, "rewrites": [{ "source": "/:path*", "destination": "/" }] }
-JSON
-
-  step "Vercel (production)"
-  vc deploy dist --prod --yes --project restie --create-if-missing
+  # The Vercel project is connected to GitHub: it builds from main with vercel.json.
+  # This sets its Supabase env vars and rebuilds production (pushing to main also redeploys).
+  step "Vercel (env vars + production rebuild)"
+  node --env-file=.env.deploy.local --env-file=.env.local scripts/vercel-web.mjs
 fi
 
 printf '\n\033[1mDone.\033[0m\n'

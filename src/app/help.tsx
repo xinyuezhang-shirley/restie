@@ -36,7 +36,7 @@ const HOWTO: { icon: IconName; title: string; steps: string }[] = [
   {
     icon: 'chat',
     title: 'Get unstuck',
-    steps: 'Press and hold Rusty (or tap the bubble next to him) → Talk to Rusty → “Don’t know where to start”. He’ll shrink it to 5 minutes and can do it with you on the focus timer.',
+    steps: 'Press and hold Rusty (or tap the bubble next to him) → Talk to Rusty → “Help me start…” (his suggestions come from what’s due for you). He’ll shrink it to 5 minutes and can do it with you on the focus timer.',
   },
   {
     icon: 'clock',
@@ -53,7 +53,10 @@ const HOWTO: { icon: IconName; title: string; steps: string }[] = [
 const RUSTY: [string, string][] = [
   ['Tap Rusty', 'he reacts (pet his head for hearts)'],
   ['Press and hold Rusty', 'his menu: talk, log, focus timer'],
+  ['Tap the floor', 'he walks over there (on a computer: arrow keys)'],
+  ['Tap his bed', 'he goes for a nap'],
   ['The ! over Rusty', 'he has a check-in on a paw promise'],
+  ['What Rusty knows', 'Rusty’s menu → what he’s learned about you; fix or forget any of it'],
   ['Mistakes', 'every “done” has Undo; or tell Rusty something’s not right'],
 ];
 

@@ -33,7 +33,7 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 
-import { SPOTS, type SpotKey } from './brain';
+import { spotAt, type Where } from './brain';
 import { RIG, type PoseKey } from './rig';
 import { RustyPuppet, type RustyPuppetHandle } from './RustyPuppet';
 import {
@@ -95,7 +95,7 @@ export interface ActorProps {
   roomH: number;
   /** puppet box size at depth scale 1 */
   size: number;
-  spot: SpotKey;
+  spot: Where;
   /** ongoing activity from the brain */
   base: PoseKey;
   /** short reaction (pet/poke); shown only while he's just sitting */
@@ -184,7 +184,7 @@ export const RustyActor = forwardRef<RustyPuppetHandle, ActorProps>(function Rus
   /* ------------------------------------- sequencer state (JS, across renders) */
 
   type Mode = 'puppet' | 'sprite';
-  const cur = useRef<{ spot: SpotKey; action: SheetKey | null; mode: Mode; sheet: SheetKey | null }>({
+  const cur = useRef<{ spot: Where; action: SheetKey | null; mode: Mode; sheet: SheetKey | null }>({
     spot,
     action: null,
     mode: 'puppet',
@@ -203,8 +203,8 @@ export const RustyActor = forwardRef<RustyPuppetHandle, ActorProps>(function Rus
   });
 
   // Put him on a spot without walking.
-  const place = (at: SpotKey) => {
-    const s = SPOTS[at];
+  const place = (at: Where) => {
+    const s = spotAt(at);
     fx.set(s.x * dims.current.W);
     fy.set(s.y * dims.current.H);
     sc.set(s.s);
@@ -291,9 +291,9 @@ export const RustyActor = forwardRef<RustyPuppetHandle, ActorProps>(function Rus
     await wait(reduce ? 0 : 200); // a breath of sitting before the next thing
   };
 
-  const walkTo = async (dest: SpotKey) => {
+  const walkTo = async (dest: Where) => {
     const { W, H } = dims.current;
-    const to = SPOTS[dest];
+    const to = spotAt(dest);
     const tx = to.x * W;
     const ty = to.y * H;
     if (reduce) {

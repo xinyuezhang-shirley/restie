@@ -11,7 +11,7 @@ import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native
 import Animated, { FadeInUp } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { suggestGoals, suggestPath } from '@/ai/rusty';
+import { suggestGoals, suggestPath, understandHobby, type HobbyGuess } from '@/ai/rusty';
 import { hobbyChoices, hobbyIcons, iconFor } from '@/assets';
 import { WhenPicker, type WhenValue } from '@/components/WhenPicker';
 import { BottomNav } from '@/components/BottomNav';
@@ -19,11 +19,11 @@ import { Icon } from '@/components/Icon';
 import { Bubble, Button, Card, Chip, ChipRow, Eyebrow, IconButton, NavBar, OptionRow, Row, RustyAvatar, T, Typing } from '@/components/ui';
 import { addMilestone, addPromise, createHobby, updateHobby } from '@/data/actions';
 import { milestonesOf } from '@/data/selectors';
-import { showToast, useStore } from '@/data/store';
+import { alive, showToast, useStore } from '@/data/store';
 import type { HobbyIcon } from '@/data/types';
 import { colors, fonts, radius, space } from '@/theme/tokens';
 
-type Step = 'what' | 'kind' | 'goal' | 'path' | 'rhythm' | 'first' | 'when' | 'promise';
+type Step = 'what' | 'which' | 'kind' | 'goal' | 'path' | 'rhythm' | 'first' | 'when' | 'promise';
 interface Msg {
   from: 'rusty' | 'user';
   text: string;
@@ -59,6 +59,8 @@ export default function NewHobby() {
   const [rhythm, setRhythm] = useState('');
   const [first, setFirst] = useState('');
   const [when, setWhen] = useState<WhenValue | null>(null);
+  /** several hobbies typed at once ("poetry, working out, painting") */
+  const [many, setMany] = useState<HobbyGuess[]>([]);
 
   useEffect(() => {
     const t = setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 80);
@@ -118,17 +120,61 @@ export default function NewHobby() {
   };
 
   const pickGoal = async (g: string) => {
-    setGoal(g);
     say('user', g);
+    await buildPath(name, g);
+  };
+
+  /** Rusty sketches the milestones for a goal (Claude, or the offline paths). */
+  const buildPath = async (n: string, g: string) => {
+    setGoal(g);
     setStep('path');
     setBusy(true);
     setTyping(true);
-    const p = await suggestPath(name, g);
+    const p = await suggestPath(n, g);
     setTyping(false);
     setBusy(false);
     setPath(p.milestones);
     setFirstIdeas(p.firstSteps);
     say('rusty', 'Here’s a path I’d try. You can change anything:');
+  };
+
+  /**
+   * Typed hobbies are often a sentence or a list. Rusty works out what you
+   * meant (short names, plus a goal if you said one) and says it back, so a
+   * sentence never becomes a hobby's name. Tap your answer to correct him.
+   */
+  const understand = async (raw: string) => {
+    say('user', raw);
+    setBusy(true);
+    setTyping(true);
+    const guesses = await understandHobby(raw);
+    setTyping(false);
+    setBusy(false);
+    if (guesses.length > 1) {
+      setMany(guesses);
+      setStep('which');
+      say('rusty', `Sounds like ${guesses.length} hobbies: ${guesses.map((g) => g.name).join(', ')}. Let’s set them up one at a time. Which first?`);
+      return;
+    }
+    await startWith(guesses[0]);
+  };
+
+  const startWith = async (g: HobbyGuess, others: HobbyGuess[] = []) => {
+    setName(g.name);
+    setIcon(g.icon);
+    // (skip any already added, e.g. after going back and picking another one first)
+    const have = new Set(alive(useStore.getState().hobbies).map((h) => h.name.toLowerCase()));
+    others = others.filter((o) => !have.has(o.name.toLowerCase()));
+    for (const o of others) createHobby({ name: o.name, icon: o.icon, kind: o.goal ? 'goal' : 'keep', goal: o.goal || undefined, milestones: [] });
+    const also = others.length ? ` I added ${others.map((o) => o.name).join(' and ')} to your hobbies too, so you can plan ${others.length > 1 ? 'them' : 'it'} later.` : '';
+    if (g.goal) {
+      setKind('goal');
+      say('rusty', `Got it: ${g.name}, with the goal “${g.goal}”.${also} (Not quite? Tap your answer to change it.)`);
+      await buildPath(g.name, g.goal);
+      return;
+    }
+    setStep('kind');
+    await rustySoon(`${g.name}! I love that.${also} Are you working toward a goal, or is it just for fun?`);
   };
 
   const pickRhythm = async (r: string) => {
@@ -198,7 +244,7 @@ export default function NewHobby() {
     const t = input.trim();
     if (!t) return;
     setInput('');
-    if (step === 'what') void pickHobby(t);
+    if (step === 'what') void understand(t);
     else if (step === 'goal') void pickGoal(t);
     else if (step === 'first') void pickFirst(t);
     else if (step === 'rhythm') void pickRhythm(t);
@@ -252,6 +298,26 @@ export default function NewHobby() {
             {/* any hobby at all (eval #37) */}
             <Chip custom onPress={() => inputRef.current?.focus()}>
               Something else…
+            </Chip>
+          </ChipRow>
+        )}
+
+        {!typing && step === 'which' && (
+          <ChipRow>
+            {many.map((g) => (
+              <Chip key={g.name} image={hobbyIcons[g.icon]} onPress={() => { say('user', g.name); void startWith(g, many.filter((o) => o !== g)); }}>
+                {g.name}
+              </Chip>
+            ))}
+            <Chip
+              custom
+              onPress={() => {
+                for (const g of many) createHobby({ name: g.name, icon: g.icon, kind: g.goal ? 'goal' : 'keep', goal: g.goal || undefined, milestones: [] });
+                showToast(`Added ${many.length} hobbies. Plan each one whenever you like.`);
+                router.dismissTo('/hobbies');
+              }}
+            >
+              {`Add all ${many.length}, plan later`}
             </Chip>
           </ChipRow>
         )}

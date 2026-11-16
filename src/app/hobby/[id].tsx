@@ -157,10 +157,10 @@ export default function HobbyDetail() {
       {/* log or promise right here, without going back to Home (eval #11) */}
       <View style={{ gap: space.sm }}>
         <Button icon="check" onPress={() => router.push({ pathname: '/log', params: { hobbyId: hobby.id } })}>
-          {`Log a ${hobby.name.toLowerCase()} step`}
+          Log a step
         </Button>
         <Button variant="secondary" icon="paw" onPress={() => router.push({ pathname: '/promise', params: { hobbyId: hobby.id } })}>
-          {`Promise a ${hobby.name.toLowerCase()} step`}
+          Promise a step
         </Button>
       </View>
 

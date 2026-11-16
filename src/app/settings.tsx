@@ -2,7 +2,7 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Platform, Switch, View } from 'react-native';
 
-import { Button, Card, Chip, ChipRow, Eyebrow, Field, NavBar, Row, Screen, T } from '@/components/ui';
+import { Button, Card, Chip, ChipRow, Eyebrow, Field, NavBar, OptionRow, Row, Screen, T } from '@/components/ui';
 import { seedDemo } from '@/data/seed';
 import { patchProfile, resetLocal, showToast, useStore } from '@/data/store';
 import { wipeRemote } from '@/data/sync';
@@ -190,16 +190,7 @@ export default function Settings() {
           Rusty’s replies are written by Claude (Anthropic). He only sees a short summary of your hobbies and plans — never your photos or
           location.
         </T>
-        {profile.mind.lessons.length > 0 && (
-          <>
-            <Eyebrow color={colors.inkSoft}>What Rusty has learned about you</Eyebrow>
-            {profile.mind.lessons.map((l) => (
-              <T key={l} v="caption">
-                • {l}
-              </T>
-            ))}
-          </>
-        )}
+        <OptionRow title="What Rusty knows about you" meta="See, fix or forget what he keeps in mind" onPress={() => router.push('/knows')} />
       </Card>
       <T v="caption" center>
         Restie · CS 147 Autumn 2026 · Shirley Z. & Ziyu R.

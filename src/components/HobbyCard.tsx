@@ -33,14 +33,14 @@ export function HobbyCard({ hobby, onPress }: { hobby: Hobby; onPress: () => voi
         <Image source={hobbyIcons[hobby.icon]} style={{ width: 50, height: 50 }} contentFit="contain" />
       </View>
       <View style={{ flex: 1, gap: space.xs }}>
-        <Row style={{ justifyContent: 'space-between' }}>
-          <Row gap={6}>
-            <T v="title2">{hobby.name}</T>
-            {isNew && <Tag>New</Tag>}
-            {hobby.status === 'paused' && <Tag color={colors.border}>Resting</Tag>}
-          </Row>
-          <T v="caption">{isNew && !hobby.lastDoneAt ? 'Started today' : lastWorked(ago(hobby.lastDoneAt))}</T>
+        {/* Name wraps (never runs off the card); tags sit after it; when you
+            last worked on it gets its own line so long names can't push it out. */}
+        <Row gap={6} style={{ flexWrap: 'wrap' }}>
+          <T v="title2">{hobby.name}</T>
+          {isNew && <Tag>New</Tag>}
+          {hobby.status === 'paused' && <Tag color={colors.border}>Resting</Tag>}
         </Row>
+        <T v="caption">{isNew && !hobby.lastDoneAt ? 'Started today' : lastWorked(ago(hobby.lastDoneAt))}</T>
         <T v="callout" color={colors.inkSoft} numberOfLines={2}>
           {hobby.kind === 'goal' ? `Goal: ${hobby.goal}` : `Just for fun${hobby.rhythm ? ` · ${hobby.rhythm}` : ''}`}
         </T>
@@ -66,6 +66,11 @@ export function HobbyCard({ hobby, onPress }: { hobby: Hobby; onPress: () => voi
           <T v="caption" color={colors.actionText}>
             Next step: {next.title}
             {next.dueAt ? ` · ${plannedFor(next.dueAt, next.timed)}` : ''}
+          </T>
+        ) : progress.milestones.length === 0 ? (
+          // nothing planned yet: say what tapping does (instead of a dead end)
+          <T v="caption" color={colors.actionText}>
+            No next step yet · tap to add one ›
           </T>
         ) : null}
       </View>

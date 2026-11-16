@@ -53,6 +53,28 @@ export const SPOTS: Record<SpotKey, { x: number; y: number; s: number }> = {
   door: { x: 0.847, y: 0.573, s: 0.85 },
 };
 
+/**
+ * Anywhere on the floor, for "walk over here" taps: `@x,y` in room fractions.
+ * The floor runs from the back wall (y ≈ 0.56, by the desk) to the front
+ * (y ≈ 0.80, above the plans card); he's drawn smaller further back.
+ */
+export type Where = SpotKey | `@${string}`;
+export const FLOOR = { x0: 0.12, x1: 0.88, y0: 0.565, y1: 0.8 } as const;
+const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
+const depth = (y: number) => clamp(0.85 + ((y - 0.569) / (0.748 - 0.569)) * 0.15, 0.82, 1.05);
+
+/** The floor point nearest to (x, y): taps on the wall send him to the back of the floor. */
+export function freePlace(x: number, y: number): Where {
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return 'rug';
+  return `@${clamp(x, FLOOR.x0, FLOOR.x1).toFixed(3)},${clamp(y, FLOOR.y0, FLOOR.y1).toFixed(3)}` as Where;
+}
+
+export function spotAt(p: Where): { x: number; y: number; s: number } {
+  if (!(p as string).startsWith('@')) return SPOTS[p as SpotKey];
+  const [x, y] = (p as string).slice(1).split(',').map(Number);
+  return { x, y, s: depth(y) };
+}
+
 type Reaction = 'celebrate' | 'wave';
 
 /** A specific thing to do next (Settings → "Make Rusty…", for demos). */
@@ -90,7 +112,7 @@ export interface Brain {
   base: PoseKey;
   /** a short reaction to a pet/poke, or null */
   reaction: PoseKey | null;
-  spot: SpotKey;
+  spot: Where;
   line: string | null;
   /** out on a trip: the door sign says when he's back */
   away: { back: string; note: string } | null;
@@ -103,6 +125,12 @@ export interface Brain {
   say: (text: string, ms?: number) => void;
   /** clear the speech bubble */
   hush: () => void;
+  /** you tapped the floor (room fractions): he walks there and sits a while */
+  goTo: (x: number, y: number) => void;
+  /** you tapped his bed: a nap */
+  goToBed: () => void;
+  /** arrow keys: a few steps that way */
+  nudge: (dir: 'up' | 'down' | 'left' | 'right') => void;
 }
 
 const HOBBY_DOING: Record<string, string> = {
@@ -116,8 +144,10 @@ const HOBBY_DOING: Record<string, string> = {
 };
 
 /** The subtitle for what he's doing. */
-function doingLine(kind: string, pose: PoseKey, spot: SpotKey, icon: HobbyIcon | undefined, condition: Condition): string {
+function doingLine(kind: string, pose: PoseKey, spot: Where, icon: HobbyIcon | undefined, condition: Condition): string {
   if (kind === 'tour') return 'Rusty is waiting to meet you';
+  if (kind === 'asked' && pose === 'sleep') return 'Rusty is napping in his bed (you said so)';
+  if (kind === 'asked') return 'Rusty came over where you tapped';
   if (kind === 'hobby' && icon) return HOBBY_DOING[icon] ?? HOBBY_DOING.other;
   if (pose === 'paint') return HOBBY_DOING.drawing;
   if (pose === 'cook') return HOBBY_DOING.baking;
@@ -212,8 +242,10 @@ export function useRustyBrain(visible: boolean, paused = false): Brain {
   // Interrupts that sit on top of the plan for a while.
   const [hold, setHold] = useState<{
     pose: PoseKey;
-    spot: SpotKey;
+    spot: Where;
     until: number;
+    /** you asked him to (tap / arrow keys), not the plan */
+    asked?: boolean;
   } | null>(null);
   const [override, setOverride] = useState<PoseKey | null>(null);
   const [line, setLine] = useState<string | null>(null);
@@ -243,7 +275,7 @@ export function useRustyBrain(visible: boolean, paused = false): Brain {
   const activeHold = hold && clock < hold.until ? hold : null;
   const block: {
     pose: PoseKey;
-    spot: SpotKey;
+    spot: Where;
     kind: string;
     key: string;
     icon?: HobbyIcon;
@@ -254,7 +286,7 @@ export function useRustyBrain(visible: boolean, paused = false): Brain {
       : returning
         ? { pose: 'wave', spot: 'door', kind: 'hold', key: 'returning' }
         : activeHold
-          ? { ...activeHold, kind: 'hold', key: `hold-${activeHold.until}` }
+          ? { ...activeHold, kind: activeHold.asked ? 'asked' : 'hold', key: `hold-${activeHold.until}` }
           : planned.kind === 'away'
             ? { pose: 'sit', spot: 'door', kind: 'away', key: 'away' }
             : {
@@ -437,6 +469,41 @@ export function useRustyBrain(visible: boolean, paused = false): Brain {
     }
   }, [block.pose, override, flash, say, streak, wake]);
 
+  // You tell him where to go: tap the floor, tap his bed, or arrow keys.
+  const goTo = useCallback(
+    (x: number, y: number) => {
+      if (!visible || paused || away) return;
+      const wasAsleep = (override ?? block.pose) === 'sleep';
+      setHold({ pose: 'sit', spot: freePlace(x, y), until: Date.now() + 90_000, asked: true });
+      if (wasAsleep) say(pick(lines.woken), 2500);
+      else if (Math.random() < 0.3) say(pick(['coming!', 'on my way.', 'this spot? okay.', 'trot trot trot.']), 2000);
+    },
+    [visible, paused, away, override, block.pose, say],
+  );
+  const goToBed = useCallback(() => {
+    if (!visible || paused || away) return;
+    if (block.pose === 'sleep' && block.spot === 'bed') {
+      say('(he’s already curled up. zzz.)', 2500);
+      return;
+    }
+    setHold({ pose: 'sleep', spot: 'bed', until: Date.now() + 3 * 60_000, asked: true });
+    say(pick(['a nap? you don’t have to ask twice.', 'bedtime! just a short one.', 'okay… five more minutes. or fifty.']), 3000);
+  }, [visible, paused, away, block.pose, block.spot, say]);
+  const nudge = useCallback(
+    (dir: 'up' | 'down' | 'left' | 'right') => {
+      if (!visible || paused || away) return;
+      const at = spotAt(block.spot);
+      const [dx, dy] = { up: [0, -0.07], down: [0, 0.07], left: [-0.14, 0], right: [0.14, 0] }[dir];
+      const next = freePlace(at.x + dx, at.y + dy);
+      if (next === freePlace(at.x, at.y)) {
+        say(dir === 'up' ? 'that’s the wall. I can’t climb walls. yet.' : 'that’s as far as the room goes.', 2500);
+        return;
+      }
+      setHold({ pose: 'sit', spot: next, until: Date.now() + 90_000, asked: true });
+    },
+    [visible, paused, away, block.spot, say],
+  );
+
   useEffect(
     () => () => {
       clearTimeout(lineTimer.current);
@@ -465,6 +532,9 @@ export function useRustyBrain(visible: boolean, paused = false): Brain {
     poke,
     say,
     hush,
+    goTo,
+    goToBed,
+    nudge,
   };
 }
 

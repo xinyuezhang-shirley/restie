@@ -39,6 +39,12 @@ export const tap = (style: 'light' | 'medium' | 'success' = 'light') => {
 
 /* ------------------------------------------------------------------- text */
 
+/**
+ * Text shrinks and wraps inside rows instead of running off the card, and
+ * long words (names, links) break rather than overflow.
+ */
+const textBase: TextStyle = Platform.OS === 'web' ? ({ flexShrink: 1, minWidth: 0, wordBreak: 'break-word' } as TextStyle) : { flexShrink: 1 };
+
 export function T({
   v = 'body',
   style,
@@ -50,7 +56,7 @@ export function T({
     <Text
       maxFontSizeMultiplier={1.6}
       {...rest}
-      style={[type[v], color ? { color } : null, center ? { textAlign: 'center' } : null, style]}
+      style={[textBase, type[v], color ? { color } : null, center ? { textAlign: 'center' } : null, style]}
     />
   );
 }
@@ -169,7 +175,9 @@ export function Chip({
     >
       {image ? <Image source={image} style={{ width: 26, height: 26 }} contentFit="contain" /> : null}
       {icon || custom ? <Icon name={icon ?? 'pencil'} size={16} color={selected ? colors.white : colors.actionText} /> : null}
-      <Text style={[type.label, { fontSize: 15 }, custom && { color: colors.actionText }, selected && { color: colors.white }]}>{children}</Text>
+      <Text numberOfLines={2} style={[textBase, type.label, { fontSize: 15 }, custom && { color: colors.actionText }, selected && { color: colors.white }]}>
+        {children}
+      </Text>
     </Pressable>
   );
 }
@@ -389,7 +397,7 @@ export function NavBar({
             accessibilityLabel={close ? 'Close' : `Back to ${backLabel}`}
             onPress={back}
             hitSlop={10}
-            style={({ pressed }) => [s.back, pressed && { opacity: 0.6 }]}
+            style={({ pressed }) => [s.back, { maxWidth: '100%' }, pressed && { opacity: 0.6 }]}
           >
             <Icon name={close ? 'close' : 'back'} color={colors.actionText} />
             {!close && backLabel ? <T v="headline" color={colors.actionText} numberOfLines={1}>{backLabel}</T> : null}
@@ -397,7 +405,8 @@ export function NavBar({
         ) : null}
       </View>
       {title ? (
-        <T v="headline" numberOfLines={1} style={{ flex: 2, textAlign: 'center' }} accessibilityRole="header">
+        // up to two lines: a page's title is often a name (never cut a name short)
+        <T v="headline" numberOfLines={2} style={{ flex: 2, textAlign: 'center', paddingHorizontal: space.xs }} accessibilityRole="header">
           {title}
         </T>
       ) : (
@@ -554,6 +563,7 @@ const s = StyleSheet.create({
   },
   buttonSmall: { minHeight: 40, paddingHorizontal: space.lg },
   chip: {
+    maxWidth: '100%',
     minHeight: touch,
     paddingHorizontal: space.lg,
     paddingVertical: space.sm,

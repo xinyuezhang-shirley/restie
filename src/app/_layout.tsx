@@ -72,6 +72,7 @@ export default function RootLayout() {
               <Stack.Screen name="promise" options={sheet} />
               <Stack.Screen name="step/[id]" options={sheet} />
               <Stack.Screen name="report" options={sheet} />
+              <Stack.Screen name="knows" options={sheet} />
               <Stack.Screen name="focus/done" options={{ ...sheet, gestureEnabled: false }} />
               <Stack.Screen name="keepsake/[id]" options={sheet} />
               <Stack.Screen name="pin" options={sheet} />

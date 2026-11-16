@@ -11,6 +11,7 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { CheckinCard } from '@/components/CheckinCard';
 import { Icon } from '@/components/Icon';
 import { Sheet } from '@/components/Sheet';
+import { noticedOf, notesOf } from '@/rusty/knows';
 import { CHEVRON, Eyebrow, OptionRow, Row, RustyAvatar, T, tap } from '@/components/ui';
 import { completeTask } from '@/data/actions';
 import { checkinOf, skipSuggestionOf } from '@/data/selectors';
@@ -21,6 +22,8 @@ import { colors, radius, space } from '@/theme/tokens';
 export default function RustySheet() {
   const checkin = useDerived(checkinOf);
   const skip = useDerived(skipSuggestionOf);
+  const known = useDerived((s) => notesOf(s).length + noticedOf(s).length);
+  const knowsMeta = known ? `${known} thing${known === 1 ? '' : 's'} he keeps in mind. See or fix them` : 'He learns as you chat and work together';
   const name = useStore((s) => s.profile.name);
 
   return (
@@ -58,6 +61,7 @@ export default function RustySheet() {
 
         <OptionRow title="Log a step" meta="Mark something you did as done" onPress={() => router.replace('/log')} />
         <OptionRow title="Focus timer" meta="A quiet timer with Rusty working beside you" onPress={() => router.replace('/focus/setup')} />
+        <OptionRow title="What Rusty knows about you" meta={knowsMeta} onPress={() => router.replace('/knows')} />
         {skip && (
           <OptionRow
             title="What can wait today?"

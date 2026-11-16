@@ -62,12 +62,35 @@ const MODES: Record<string, { schema: object; effort: 'low' | 'medium' | 'high';
       reply: str,
       suggestion: obj({ type: { type: 'string', enum: ['focus', 'plan', 'none'] }, title: str, minutes: { type: 'integer' }, hobby: str }),
       quickReplies: strArr,
+      remember: strArr,
     }),
     task: (b) =>
       `The person just wrote: "${b.text}"
 
-Reply as Rusty in "reply". If they're stuck, unmotivated, or don't know where to start, shrink their current milestone into one tiny step (about 5 minutes, concrete, starts with a verb, under 8 words) and set suggestion.type "focus" (do it now with you) — or "plan" if they want to schedule it. Put the hobby's exact name in suggestion.hobby. Otherwise suggestion.type is "none" with empty title/hobby and minutes 0.
-"quickReplies": 0–3 short things the person might tap next (2–5 words each, in their voice).`,
+Reply as Rusty in "reply". Use what you know (their list, what's due, what could wait, and "What you know about them") so the answer is specific to them, never generic. If they're stuck, unmotivated, or don't know where to start, shrink their current milestone into one tiny step (about 5 minutes, concrete, starts with a verb, under 8 words) and set suggestion.type "focus" (do it now with you) — or "plan" if they want to schedule it. Respect their known preferences (e.g. if they like evenings, plan for the evening). Put the hobby's exact name in suggestion.hobby. Otherwise suggestion.type is "none" with empty title/hobby and minutes 0.
+"quickReplies": 0–3 short, specific things the person might say next (2–6 words, in their voice), naming real items from their list when it helps (e.g. "What about problem set 6?"). When there's a suggestion, the card already has "Do it now" and "Find a time" buttons, so never offer agreeing replies like "okay, let's start"; offer alternatives instead.
+"remember": 0–2 new, durable facts about the person worth remembering for next time, learned from what they just wrote: preferences, energy patterns, constraints, what helps or doesn't (e.g. "Prefers to practice guitar in the evening", "Feels drained after work on Mondays", "Wants drawing to stay low-pressure"). Short, third person, no names. Only things they actually said or clearly implied; skip anything already in "What you know about them"; never store sensitive details (health conditions, relationships, money, location). Usually [].`,
+  },
+  hobby: {
+    // What the person typed when adding a hobby: often a sentence, or several hobbies at once.
+    effort: 'low',
+    schema: obj({
+      hobbies: {
+        type: 'array',
+        items: obj({
+          name: str,
+          icon: { type: 'string', enum: ['guitar', 'drawing', 'baking', 'reading', 'writing', 'gardening', 'other'] },
+          goal: str,
+        }),
+      },
+    }),
+    task: (b) =>
+      `The person typed this when adding a hobby: "${b.text}"
+Pull out the hobby or hobbies they mean (at most 4).
+- "name": the hobby itself, 1 to 3 words, capitalized like a title (e.g. "Working out", "Poetry", "Watercolor"). Never a sentence, never "my", "I want".
+- "icon": the closest picture: guitar (any music), drawing (any visual art), baking (cooking too), reading, writing (poetry, journaling), gardening, or other.
+- "goal": if they said what they want to achieve, rewrite it as a short goal in their voice, under 7 words, starting with a verb (e.g. "Build a weekly workout routine"). Otherwise "".
+If it isn't a hobby at all, return the closest reasonable hobby anyway.`,
   },
   goals: {
     effort: 'low',

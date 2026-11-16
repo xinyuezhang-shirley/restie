@@ -9,17 +9,19 @@ import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TextInput, View
 import Animated, { FadeInUp } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { chat } from '@/ai/rusty';
+import { chat, chatStarters } from '@/ai/rusty';
 import { WhenPicker } from '@/components/WhenPicker';
 import { BottomNav } from '@/components/BottomNav';
-import { Bubble, Button, Card, Chip, ChipRow, IconButton, NavBar, T, Typing } from '@/components/ui';
+import { Bubble, Button, Card, Chip, ChipRow, IconButton, NavBar, Row, T, Typing } from '@/components/ui';
 import { addPromise } from '@/data/actions';
 import { alive, put, remove, showToast, useDerived, useStore } from '@/data/store';
-import type { ChatMessage, RustySuggestion } from '@/data/types';
+import type { ChatMessage, RustyNote, RustySuggestion } from '@/data/types';
+import { forgetNote, remember, restoreNote } from '@/rusty/knows';
 import { now } from '@/lib/time';
 import { colors, fonts, radius, space } from '@/theme/tokens';
 
-const STARTERS = ['Don’t know where to start', 'I’m pretty busy this week', 'How was your day?'];
+/** When you came from a step ("Talk to Rusty" on a check-in): the usual reasons it's stuck. */
+const ABOUT_STARTERS = ['It feels too big', 'No time today', 'I don’t feel like it'];
 
 export default function Chat() {
   const { about } = useLocalSearchParams<{ about?: string }>();
@@ -30,15 +32,18 @@ export default function Chat() {
   const history = useDerived((s) => alive(s.messages).sort((a, b) => a.createdAt.localeCompare(b.createdAt)));
   const [input, setInput] = useState('');
   const [thinking, setThinking] = useState(false);
-  // Starters + the last things you asked Rusty, so you don't retype them (eval #22).
-  const starters = useDerived((s) => {
-    const mine = alive(s.messages)
+  // Starters from your actual situation (what's due, what could wait, a hobby
+  // you miss), then the last things you asked, so you don't retype them (eval #22).
+  const startersNow = () => {
+    const mine = alive(useStore.getState().messages)
       .filter((m) => m.role === 'user' && m.text.length <= 40)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
       .map((m) => m.text);
-    return [...new Set([...STARTERS, ...mine])].slice(0, 5);
-  });
-  const [quick, setQuick] = useState<string[]>(starters);
+    return [...new Set([...(aboutTask ? ABOUT_STARTERS : chatStarters()), ...mine])].slice(0, 5);
+  };
+  const [quick, setQuick] = useState<string[]>(startersNow);
+  /** what Rusty learned from each of his replies (shown under it, with Undo) */
+  const [learned, setLearned] = useState<Record<string, RustyNote[]>>({});
   const [planFor, setPlanFor] = useState<string | null>(null);
   const greeted = useRef(false);
 
@@ -76,13 +81,15 @@ export default function Chat() {
     setThinking(true);
     const res = await chat(before, t);
     setThinking(false);
-    put('messages', { role: 'rusty', text: res.reply, suggestion: res.suggestion, createdAt: now() });
+    const msg = put('messages', { role: 'rusty', text: res.reply, suggestion: res.suggestion, createdAt: now() });
+    const notes = remember(res.remember);
+    if (notes.length) setLearned((l) => ({ ...l, [msg.id]: notes }));
     setQuick(res.quickReplies);
   };
 
   const clear = () => {
     for (const m of alive(useStore.getState().messages)) remove('messages', m.id);
-    setQuick(starters);
+    setQuick(startersNow());
     put('messages', { role: 'rusty', text: 'Fresh page! What’s on your mind?', suggestion: null, createdAt: now() });
   };
 
@@ -98,6 +105,7 @@ export default function Chat() {
         {recent.map((m) => (
           <Animated.View key={m.id} entering={FadeInUp.duration(200)} style={m.role === 'user' ? { alignItems: 'flex-end' } : undefined}>
             <Bubble from={m.role === 'rusty' ? 'rusty' : 'user'}>{m.text}</Bubble>
+            {learned[m.id] && <Learned notes={learned[m.id]} />}
             {m.suggestion && m.id === lastSuggestionId && (
               <SuggestionCard
                 m={m}
@@ -137,6 +145,37 @@ export default function Chat() {
       </View>
       <BottomNav active="index" />
     </KeyboardAvoidingView>
+  );
+}
+
+/** "Rusty will remember: …" — learning is visible, and one tap undoes each. */
+function Learned({ notes }: { notes: RustyNote[] }) {
+  const stored = useStore((s) => s.profile.mind.notes);
+  const kept = new Set((stored ?? []).map((n) => n.id));
+  return (
+    <View style={styles.learned} accessibilityLiveRegion="polite">
+      <Row style={{ justifyContent: 'space-between' }}>
+        <T v="caption" color={colors.inkSoft}>
+          📝 Rusty will remember
+        </T>
+        <Button small full={false} variant="tertiary" onPress={() => router.push('/knows')}>
+          See all
+        </Button>
+      </Row>
+      {notes.map((n) => {
+        const on = kept.has(n.id);
+        return (
+          <Row key={n.id} style={{ justifyContent: 'space-between' }}>
+            <T v="caption" color={on ? colors.ink : colors.inkSoft} style={[{ flex: 1 }, !on && { textDecorationLine: 'line-through' }]}>
+              {n.text}
+            </T>
+            <Button small full={false} variant="tertiary" onPress={() => (on ? forgetNote(n.id) : restoreNote(n))} accessibilityLabel={on ? `Forget: ${n.text}` : `Keep: ${n.text}`}>
+              {on ? 'Undo' : 'Keep'}
+            </Button>
+          </Row>
+        );
+      })}
+    </View>
   );
 }
 
@@ -193,6 +232,18 @@ function SuggestionCard({
 }
 
 const styles = StyleSheet.create({
+  learned: {
+    gap: 0,
+    marginTop: space.xs,
+    marginLeft: 44,
+    paddingLeft: space.md,
+    paddingRight: space.xs,
+    paddingVertical: space.xs,
+    borderRadius: radius.input,
+    backgroundColor: colors.whiteSoft,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
   bar: {
     flexDirection: 'row',
     alignItems: 'flex-end',

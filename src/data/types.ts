@@ -153,12 +153,24 @@ export interface RustyMind {
   diaryFor?: string | null;
   /** today's souvenir idea from the AI (used when he gets back) */
   tripIdea?: { date: string; caption: string; line: string } | null;
-  /** short facts Rusty learned (shown in Settings → What Rusty knows) */
+  /** @deprecated replaced by `notes` (kept so older synced profiles still load) */
   lessons: string[];
+  /** What Rusty remembers about you: told in chat, or added by you (Settings → What Rusty knows) */
+  notes?: RustyNote[];
+  /** ids of "I noticed" patterns you said aren't true, so he stops using them */
+  hiddenNoticed?: string[];
   /** cached AI lines for the day */
   lines?: { date: string; lines: string[] } | null;
   /** "Something's not right?" reports (synced with the profile for the team) */
   reports?: { at: ISO; kind: string; text: string; screen?: string }[];
+}
+
+export interface RustyNote {
+  id: string;
+  text: string;
+  /** chat: Rusty picked it up from a conversation · you: you wrote it */
+  source: 'chat' | 'you';
+  at: ISO;
 }
 
 export interface Profile {

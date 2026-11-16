@@ -14,15 +14,15 @@
  */
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming, type SharedValue } from 'react-native-reanimated';
+import { useEffect, useRef, useState, type ComponentRef } from 'react';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, { FadeOut, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming, ZoomIn, type SharedValue } from 'react-native-reanimated';
 
 import { Icon } from '@/components/Icon';
 import { KeepsakeImage } from '@/components/KeepsakeImage';
 import { tap } from '@/components/ui';
 import type { HobbyIcon, Keepsake } from '@/data/types';
-import { SPOTS, type Brain } from '@/rusty/brain';
+import { freePlace, spotAt, type Brain } from '@/rusty/brain';
 import { lines, objectLine, pick } from '@/rusty/personality';
 import { PUPPET_HEAD } from '@/rusty/sprites';
 import { FOOT_Y, RustyActor } from '@/rusty/RustyActor';
@@ -31,7 +31,7 @@ import { colors, fonts, shadows, space } from '@/theme/tokens';
 import { remeasureTarget, tutorialEvent, useTutorialTarget } from '@/tutorial/tutorial';
 import { useSky, type Condition, type Phase } from '@/world/world';
 
-import { BED_RIM, BOARD, CLOCK, DOOR, FRAME_SLOTS, FRAMES_AREA, GLASS, HOME_ORDER, HOMES, IMG, NOTES, OBJECT_ASPECT } from './layout';
+import { BED, BED_RIM, BOARD, CLOCK, DOOR, FRAME_SLOTS, FRAMES_AREA, GLASS, HOME_ORDER, HOMES, IMG, NOTES, OBJECT_ASPECT } from './layout';
 import { BED_RIM_DAY, BED_RIM_NIGHT, OBJECTS, ROOM_DAY, ROOM_NIGHT } from './objects';
 import { lightFor, NIGHT, roomWash, StormFlash, SunPatch, WindowView } from './Sky';
 
@@ -74,7 +74,7 @@ export function Room(p: Props) {
 
   // Rusty's feet + depth scale. RustyActor walks him between spots and plays
   // his moves; the bubble follows him.
-  const start = SPOTS[p.brain.spot];
+  const start = spotAt(p.brain.spot);
   const fx = useSharedValue(start.x * p.width);
   const fy = useSharedValue(start.y * height);
   const sc = useSharedValue(start.s);
@@ -94,13 +94,65 @@ export function Room(p: Props) {
   const inUse: Partial<Record<HobbyIcon, boolean>> = { drawing: p.brain.base === 'paint', baking: p.brain.base === 'cook' };
   const wash = roomWash(phase, condition);
 
+  const roomRef = useRef<ComponentRef<typeof View>>(null);
+  // Where you sent him: a paw print that fades when he gets going.
+  const [mark, setMark] = useState<{ x: number; y: number; id: number } | null>(null);
+  useEffect(() => {
+    if (!mark) return;
+    const t = setTimeout(() => setMark(null), 1100);
+    return () => clearTimeout(t);
+  }, [mark]);
+
+  // On a computer: arrow keys walk him around (not while you're typing).
+  const nudge = p.brain.nudge;
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (e.metaKey || e.ctrlKey || e.altKey || (el && (/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) || el.isContentEditable))) return;
+      const dir = ({ ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' } as const)[e.key as 'ArrowUp'];
+      if (!dir) return;
+      e.preventDefault();
+      nudge(dir);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [nudge]);
+
   return (
-    <View style={{ width: p.width, height, overflow: 'hidden' }} accessibilityLabel="Rusty's room">
+    <View ref={roomRef} style={{ width: p.width, height, overflow: 'hidden' }} accessibilityLabel="Rusty's room">
       {/* outside, seen through the cut-out window glass */}
       <WindowView phase={phase} condition={condition} k={k} />
       {/* the room by day, and lamp-lit by night (fades in at dusk) */}
       <Image source={ROOM_DAY} style={StyleSheet.absoluteFill} contentFit="fill" accessible={false} />
       <NightPlate amount={NIGHT[phase]} />
+
+      {/* Tap anywhere in the room and Rusty walks over (a tap on the wall
+          sends him to the back of the floor). Things you can tap sit above. */}
+      <Pressable
+        style={StyleSheet.absoluteFill}
+        accessible={false}
+        onPress={(e) => {
+          if (p.brain.away) return;
+          // pageX/Y minus where the room is on the page (locationX isn't reliable on web)
+          const { pageX, pageY } = e.nativeEvent;
+          roomRef.current?.measure((_x, _y, _w, _h, left, top) => {
+            const fxr = (pageX - left) / p.width;
+            const fyr = (pageY - top) / height;
+            if (!Number.isFinite(fxr) || !Number.isFinite(fyr)) return;
+            const to = spotAt(freePlace(fxr, fyr));
+            setMark({ x: to.x * p.width, y: to.y * height, id: Date.now() });
+            p.brain.goTo(fxr, fyr);
+          });
+        }}
+      />
+      {mark && (
+        <Animated.View key={mark.id} entering={ZoomIn.duration(180)} exiting={FadeOut.duration(400)} pointerEvents="none" style={[styles.mark, { left: mark.x - 14, top: mark.y - 14 }]}>
+          <Icon name="paw" size={20} color={colors.action} />
+        </Animated.View>
+      )}
+      {/* his bed: tap for a nap */}
+      <Hotspot style={box(k, BED.x, BED.y, BED.w, BED.h)} a11y="Rusty's bed: send him for a nap" onPress={() => p.brain.goToBed()} />
 
       {/* pinned keepsakes in the wall frames */}
       {p.pinned.slice(0, 3).map((ks, i) => {
@@ -293,9 +345,12 @@ function Subtitle({ text, k }: { text: string; k: number }) {
   const style = useAnimatedStyle(() => ({ opacity: o.value }));
   return (
     <Animated.View pointerEvents="none" accessibilityLiveRegion="polite" style={[box(k, 40, 92, IMG.w - 80, 110), styles.subtitleWrap, style]}>
-      <Text style={styles.subtitle} numberOfLines={2}>
-        {shown}
-      </Text>
+      {/* on a soft pill so it reads on the dark night wall too */}
+      <View style={styles.subtitlePill}>
+        <Text style={styles.subtitle} numberOfLines={2}>
+          {shown}
+        </Text>
+      </View>
     </Animated.View>
   );
 }
@@ -557,6 +612,16 @@ function SpeechBubble({
 }
 
 const styles = StyleSheet.create({
+  mark: {
+    position: 'absolute',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,248,236,0.85)',
+    zIndex: 3,
+  },
   shadow: { position: 'absolute', borderRadius: 999, backgroundColor: 'rgba(110,70,35,0.18)' },
   sign: {
     backgroundColor: '#FFF4E2',
@@ -572,7 +637,8 @@ const styles = StyleSheet.create({
   signTitle: { fontFamily: fonts.heading, fontSize: 12, lineHeight: 16, color: colors.ink, textAlign: 'center' },
   signSub: { fontFamily: fonts.bodyBold, fontSize: 10, lineHeight: 14, color: colors.inkSoft, textAlign: 'center' },
   subtitleWrap: { justifyContent: 'center', alignItems: 'center' },
-  subtitle: { fontFamily: fonts.body, fontStyle: 'italic', fontSize: 14, lineHeight: 19, color: 'rgba(92,64,44,0.78)', textAlign: 'center' },
+  subtitle: { fontFamily: fonts.body, fontStyle: 'italic', fontSize: 14, lineHeight: 19, color: '#6B4A33', textAlign: 'center' },
+  subtitlePill: { maxWidth: '100%', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 999, backgroundColor: 'rgba(255,248,236,0.82)' },
   contact: { position: 'absolute', borderRadius: 999, backgroundColor: 'rgba(95,58,28,0.22)' },
   news: {
     position: 'absolute',

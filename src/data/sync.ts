@@ -102,7 +102,10 @@ export async function flush() {
         .filter(Boolean)
         .map((e) => toRow(e, userId));
       if (rows.length === 0) continue;
-      const { error } = await supabase.from(table).upsert(rows, { onConflict: 'id' });
+      // A batch mixes rows with different fields (e.g. steps with and without
+      // substeps). Missing fields must take the column default, not null, or
+      // NOT NULL columns reject the whole batch.
+      const { error } = await supabase.from(table).upsert(rows, { onConflict: 'id', defaultToNull: false });
       if (error) throw error;
     }
     // Remove only what we sent; writes made meanwhile stay queued.

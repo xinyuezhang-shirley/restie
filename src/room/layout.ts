@@ -29,6 +29,8 @@ export const NOTES = {
   hobbies: { x: 350, y: 280, w: 150, h: 125, rotate: '-3deg' },
   todos: { x: 474, y: 408, w: 148, h: 125, rotate: '2.5deg' },
 } as const;
+/** His cat bed (front left): tap it and he goes for a nap. */
+export const BED: Rect = { x: 30, y: 965, w: 330, h: 205 };
 export const CLOCK: Rect = { x: 350, y: 580, w: 72, h: 72 };
 export const DOOR: Rect = { x: 700, y: 528, w: 195, h: 357 };
 /** All three frames, for the Keepsakes button. */
