@@ -10,7 +10,8 @@
 //               a single object of sensible size.
 //               Claude, looking at it next to the references: appropriate?
 //               shows the subject? makes sense? same style? reads as an object
-//               in the room? (1–5 each; pass = every score ≥ 4, no text).
+//               in the room? (1–5 each; pass = relevant, logical, style ≥ 4,
+//               composition and room fit ≥ 3, no text, pixels ok).
 //   4. retry    at most twice, with the problems fed back into the prompt.
 //   5. store    passing images go to the private `generated` bucket; every
 //               attempt is recorded in generated_assets with its checks.
@@ -205,8 +206,10 @@ Also: "appropriate" (safe for everyone, nothing scary or inappropriate), "hasTex
   );
 }
 
+// Framing (margins, clean cut-out, size) is measured exactly by the pixel checks, so the
+// judge's composition score only needs to be "okay"; everything else must be good.
 const passes = (v: Verdict, pix: { ok: boolean }) =>
-  v.appropriate && !v.hasText && v.relevant >= 4 && v.logical >= 4 && v.style >= 4 && v.composition >= 4 && v.roomFit >= 3 && pix.ok;
+  v.appropriate && !v.hasText && v.relevant >= 4 && v.logical >= 4 && v.style >= 4 && v.composition >= 3 && v.roomFit >= 3 && pix.ok;
 
 /* ------------------------------------------------------------- the cap */
 
