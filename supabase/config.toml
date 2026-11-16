@@ -1,0 +1,8 @@
+# Minimal config for `supabase link` / `supabase functions deploy`.
+project_id = "restie"
+
+[functions.rusty]
+verify_jwt = true
+
+[auth]
+enable_anonymous_sign_ins = true

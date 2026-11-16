@@ -1,0 +1,73 @@
+{
+  "expo": {
+    "name": "Restie",
+    "slug": "restie",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "restie",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#FFF8EC",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "edu.stanford.cs147.restie",
+      "icon": "./assets/images/icon.png",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Restie uses the camera so you can save a photo keepsake of your hobby.",
+        "NSPhotoLibraryUsageDescription": "Restie lets you pick a photo for a keepsake.",
+        "NSLocationWhenInUseUsageDescription": "Rusty's window shows the real weather and sunlight where you are. Your location is only sent to Open-Meteo."
+      }
+    },
+    "android": {
+      "package": "edu.stanford.cs147.restie",
+      "adaptiveIcon": {
+        "backgroundColor": "#FFF8EC",
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "backgroundImage": "./assets/images/android-icon-background.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "output": "single",
+      "favicon": "./assets/images/favicon.png",
+      "backgroundColor": "#FFF8EC"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-sqlite",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#FFF8EC",
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 120
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Restie uses the camera so you can save a photo keepsake of your hobby."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Restie lets you pick a photo for a keepsake.",
+          "cameraPermission": "Restie uses the camera so you can save a photo keepsake of your hobby."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Rusty's window shows the real weather and sunlight where you are. Your location is only sent to Open-Meteo."
+        }
+      ],
+      "expo-notifications"
+    ],
+    "experiments": {
+      "typedRoutes": false,
+      "reactCompiler": true
+    }
+  }
+}
