@@ -35,14 +35,35 @@ if (supabase && Platform.OS !== 'web') {
  * it a stable user id so Row Level Security keeps every person's data
  * private. (Enable "Anonymous sign-ins" in Supabase → Authentication.)
  */
+let lastAuthError: string | null = null;
+/** Why the last sign-in failed (shown in Settings → Rusty's AI). */
+export const authError = () => lastAuthError;
+
+let signingIn: Promise<string | null> | null = null;
+
 export async function ensureSession(): Promise<string | null> {
   if (!supabase) return null;
   const { data } = await supabase.auth.getSession();
   if (data.session) return data.session.user.id;
-  const { data: signed, error } = await supabase.auth.signInAnonymously();
-  if (error) {
-    console.warn('[restie] anonymous sign-in failed:', error.message);
-    return null;
-  }
-  return signed.user?.id ?? null;
+  // one sign-in at a time (startup and an AI call can both ask)
+  signingIn ??= (async () => {
+    try {
+      const { data: signed, error } = await supabase.auth.signInAnonymously();
+      if (error) {
+        lastAuthError = /rate limit/i.test(error.message)
+          ? 'too many sign-ins from this network in the last hour (Supabase limit); try again later'
+          : `sign-in failed: ${error.message}`;
+        console.warn('[restie] anonymous sign-in failed:', error.message);
+        return null;
+      }
+      lastAuthError = null;
+      return signed.user?.id ?? null;
+    } catch (e) {
+      lastAuthError = `couldn’t reach the sign-in server (${e instanceof Error ? e.message : String(e)})`;
+      return null;
+    } finally {
+      signingIn = null;
+    }
+  })();
+  return signingIn;
 }

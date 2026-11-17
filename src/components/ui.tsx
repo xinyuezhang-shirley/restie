@@ -492,7 +492,8 @@ export function Bubble({ from, children, avatar = true }: { from: 'rusty' | 'use
     );
   }
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: space.sm, maxWidth: '88%' }}>
+    // wide enough that a message only wraps when it really fills the line
+    <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: space.sm, maxWidth: '96%' }}>
       {avatar ? <RustyAvatar size={36} /> : <View style={{ width: 36 }} />}
       <View style={[s.bubble, s.rustyBubble]}>
         {typeof children === 'string' ? <T>{children}</T> : children}
@@ -611,7 +612,7 @@ const s = StyleSheet.create({
   },
   nav: { height: 52, flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.md },
   back: { flexDirection: 'row', alignItems: 'center', gap: 2, minHeight: touch, paddingRight: space.sm },
-  bubble: { paddingHorizontal: space.lg, paddingVertical: space.md, borderRadius: 20, flexShrink: 1 },
+  bubble: { paddingHorizontal: 14, paddingVertical: space.md, borderRadius: 20, flexShrink: 1 },
   rustyBubble: { backgroundColor: colors.bubbleRusty, borderBottomLeftRadius: 6 },
-  userBubble: { backgroundColor: colors.bubbleUser, alignSelf: 'flex-end', maxWidth: '80%', borderBottomRightRadius: 6 },
+  userBubble: { backgroundColor: colors.bubbleUser, alignSelf: 'flex-end', maxWidth: '88%', borderBottomRightRadius: 6 },
 });

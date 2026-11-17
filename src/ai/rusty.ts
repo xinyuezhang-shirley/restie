@@ -16,7 +16,8 @@ import {
 } from '@/data/selectors';
 import { useStore } from '@/data/store';
 import type { ChatMessage, Hobby, HobbyIcon, RustySuggestion } from '@/data/types';
-import { supabase } from '@/lib/supabase';
+import { reasonOf, reportAi } from '@/lib/health';
+import { authError, ensureSession, supabase } from '@/lib/supabase';
 import { ago, greeting, whenLabel } from '@/lib/time';
 import { useWorld } from '@/world/world';
 
@@ -26,17 +27,32 @@ import { pick } from '@/rusty/personality';
 
 const TIMEOUT_MS = 15_000;
 
+/** Planning a whole path thinks harder, so it gets longer before falling back. */
+const TIMEOUT_FOR: Record<string, number> = { path: 40_000, diary: 25_000 };
+
 async function call<T>(mode: string, body: Record<string, unknown>): Promise<T | null> {
-  if (!supabase) return null;
+  if (!supabase) {
+    reportAi(false, 'this build isn’t connected to Rusty’s server (no Supabase settings)');
+    return null;
+  }
+  // Signed in? If the first sign-in failed (network blip, blocker, rate limit), try again now
+  // instead of staying offline for the whole visit.
+  if (!(await ensureSession())) {
+    reportAi(false, authError() ?? 'this device couldn’t sign in to Rusty’s server');
+    return null;
+  }
   try {
     const result = await Promise.race([
       supabase.functions.invoke('rusty', { body: { mode, context: buildContext(), ...body } }),
-      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), TIMEOUT_MS)),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), TIMEOUT_FOR[mode] ?? TIMEOUT_MS)),
     ]);
     if (result.error) throw result.error;
+    reportAi(true);
     return (result.data ?? null) as T | null;
   } catch (e) {
-    console.warn(`[restie] rusty/${mode} fell back:`, e instanceof Error ? e.message : e);
+    const reason = reasonOf(e);
+    reportAi(false, reason);
+    console.warn(`[restie] rusty/${mode} fell back:`, reason);
     return null;
   }
 }
@@ -111,6 +127,8 @@ export interface ChatReply {
   quickReplies: string[];
   /** new things worth remembering about the person (saved by the chat screen) */
   remember: string[];
+  /** true when this came from his offline words (the AI wasn't reachable) */
+  offline?: boolean;
 }
 
 /** The card already offers "Do it now" / "Find a time", so agreeing chips would just repeat it. */
@@ -152,7 +170,7 @@ export async function chat(history: ChatMessage[], text: string, expect?: 'new_h
       remember: (res.remember ?? []).slice(0, 2),
     };
   }
-  return { log: null, todo: null, newHobby: '', ...offlineChat(text, expect), remember: offlineRemember(text) };
+  return { log: null, todo: null, newHobby: '', ...offlineChat(text, expect), remember: offlineRemember(text), offline: true };
 }
 
 /**
@@ -320,6 +338,12 @@ function firstTinyStep(h: Hobby, milestone: string): string {
     gardening: 'Water and check the plants',
   };
   return byIcon[h.icon] ?? `Spend 5 minutes on ${milestone.toLowerCase()}`;
+}
+
+/** Settings → "Try again": one tiny real request through the whole path (sign-in, server, AI). */
+export async function pingRusty(): Promise<boolean> {
+  const res = await call<{ goals: string[] }>('goals', { hobby: 'reading' });
+  return !!res?.goals?.length;
 }
 
 /* ------------------------------------------------------- new hobby helpers */

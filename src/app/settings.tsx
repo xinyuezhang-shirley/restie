@@ -4,11 +4,13 @@ import { Alert, Platform, Switch, View } from 'react-native';
 
 import { Button, Card, Chip, ChipRow, Eyebrow, Field, NavBar, OptionRow, Row, Screen, T } from '@/components/ui';
 import { useArtStatus } from '@/ai/art';
+import { pingRusty } from '@/ai/rusty';
+import { useAiHealth } from '@/lib/health';
 import { seedDemo } from '@/data/seed';
 import { patchProfile, resetLocal, showToast, useStore } from '@/data/store';
 import { wipeRemote } from '@/data/sync';
 import { askNotificationPermission } from '@/lib/notifications';
-import { supabase } from '@/lib/supabase';
+import { authError, supabase } from '@/lib/supabase';
 import { colors, space } from '@/theme/tokens';
 import { rustyBus, type SpotKey } from '@/rusty/brain';
 import { writeDiary } from '@/rusty/journal';
@@ -192,6 +194,7 @@ export default function Settings() {
           location.
         </T>
         <OptionRow title="What Rusty knows about you" meta="See, fix or forget what he keeps in mind" onPress={() => router.push('/knows')} />
+        <AiStatus />
         <Paints />
       </Card>
       <T v="caption" center>
@@ -241,5 +244,43 @@ function Paints() {
           ? `🎨 Rusty’s paints: ${s.left} of ${s.cap} drawings left this month. He draws pictures for hobbies he doesn’t have art for, and can illustrate keepsakes. Every drawing is checked before you see it.`
           : '🎨 Rusty’s drawings are off (no image model connected), so he uses his built-in art.'}
     </T>
+  );
+}
+
+/** Rusty's AI: working, or not reachable and why, with a way to try again. */
+function AiStatus() {
+  const reported = useAiHealth((s) => s.health);
+  // a failed sign-in counts even before any AI call has been tried
+  const signIn = authError();
+  const health = reported.state === 'unknown' && signIn ? { state: 'offline' as const, at: 0, reason: signIn } : reported;
+  const [checking, setChecking] = useState(false);
+  const label =
+    health.state === 'ok'
+      ? '🧠 Rusty’s AI: working.'
+      : health.state === 'offline'
+        ? `🧠 Rusty’s AI: not reachable on this device: ${health.reason}. He uses his own short replies until it’s back.`
+        : '🧠 Rusty’s AI: not checked yet on this visit.';
+  return (
+    <View style={{ gap: space.xs }}>
+      <T v="caption" color={health.state === 'offline' ? colors.actionText : undefined}>
+        {label}
+      </T>
+      {health.state !== 'ok' && (
+        <Button
+          small
+          full={false}
+          variant="secondary"
+          loading={checking}
+          onPress={async () => {
+            setChecking(true);
+            const ok = await pingRusty();
+            setChecking(false);
+            showToast(ok ? 'Rusty’s AI is working.' : 'Still not reachable. The reason is shown above.');
+          }}
+        >
+          Check again
+        </Button>
+      )}
+    </View>
   );
 }

@@ -12,12 +12,11 @@ import { View } from 'react-native';
 
 import { Icon } from '@/components/Icon';
 import { MilestoneReady } from '@/components/MilestoneReady';
-import { Button, Card, Eyebrow, Field, NavBar, ProgressBar, Row, Screen, T } from '@/components/ui';
+import { Button, Card, Eyebrow, Field, NavBar, ProgressBar, Row, RustyAvatar, Screen, T } from '@/components/ui';
 import { ofCount } from '@/copy';
 import { reopenTask, updateTask } from '@/data/actions';
 import { milestoneCount, progressOf, stepsOf } from '@/data/selectors';
 import { showToast, useDerived, useStore } from '@/data/store';
-import { RustyPuppet } from '@/rusty/RustyPuppet';
 import { colors, space } from '@/theme/tokens';
 
 export default function LogSuccess() {
@@ -30,6 +29,7 @@ export default function LogSuccess() {
   const count = useDerived((s) => (milestone ? milestoneCount(s, milestone.hobbyId, milestone.id) : { done: 0, total: 0 }), [milestone?.id]);
   const siblings = useDerived((s) => (milestone ? stepsOf(s, milestone.hobbyId, milestone.id) : []), [milestone?.id]);
   const [note, setNote] = useState(task?.note ?? '');
+  const [noteOpen, setNoteOpen] = useState(false);
   const isDone = task?.status === 'done';
   const milestoneDone = !!milestone?.doneAt;
   const ready = !!milestone && !milestoneDone && count.total > 0 && count.done === count.total;
@@ -49,23 +49,27 @@ export default function LogSuccess() {
       nav={<NavBar backLabel="Home" onBack={home} />}
       contentStyle={{ alignItems: 'stretch' }}
       tab="hobbies"
+      // One clear way out ("Done"), and the one extra thing worth doing here.
       footer={
-        <>
-          {hobby && (
-            <Button onPress={() => router.replace(`/hobby/${hobby.id}`)}>{`See ${hobby.name.toLowerCase()}’s path`}</Button>
-          )}
+        <Row>
           <Button
             variant="secondary"
             icon="camera"
+            full={false}
+            style={{ flex: 1 }}
             onPress={() => router.push({ pathname: '/camera', params: { taskId, hobbyId: hobby?.id ?? '' } })}
           >
-            Save a keepsake
+            Keepsake
           </Button>
-        </>
+          <Button full={false} style={{ flex: 1 }} onPress={home}>
+            Done
+          </Button>
+        </Row>
       }
     >
       <View style={{ alignItems: 'center' }}>
-        <RustyPuppet pose={isDone ? 'cheer' : 'sit'} size={190} accessibilityLabel="Rusty celebrating" />
+        {/* a still picture: the cheering puppet's jump leaves its box at this size */}
+        <RustyAvatar pose={isDone ? 'celebrate' : 'idle'} size={120} />
         <Eyebrow>{name ? `Nice work, ${name}` : 'Nice work'}</Eyebrow>
         <T v="display" center>
           {!isDone ? 'Step reopened' : milestoneDone ? 'Milestone reached!' : 'Step done'}
@@ -116,32 +120,40 @@ export default function LogSuccess() {
               );
             })}
           </View>
+          {/* last step done: the question lives right here, under the steps it's about */}
+          {ready && <MilestoneReady milestoneId={milestone.id} inline />}
+          {hobby && !ready && (
+            <Button variant="tertiary" small full={false} style={{ alignSelf: 'flex-start' }} onPress={() => router.replace(`/hobby/${hobby.id}`)}>
+              {`See ${hobby.name.toLowerCase()}’s whole path ›`}
+            </Button>
+          )}
         </Card>
       )}
 
-      {(ready || milestoneDone) && (
-        <MilestoneReady
-          milestoneId={milestone!.id}
-          onAddStep={() => (hobby ? router.replace(`/hobby/${hobby.id}`) : undefined)}
-        />
-      )}
+      {milestoneDone && <MilestoneReady milestoneId={milestone!.id} />}
       {milestoneDone && progress?.current && (
         <T v="callout" center>
           Next up: {progress.current.title}
         </T>
       )}
 
-      {task && isDone && (
+      {/* a note is optional, so it waits behind a link (less on screen at once) */}
+      {task && isDone && (noteOpen || note ? (
         <Field
-          label="Add a note (optional)"
+          label="Note"
           value={note}
+          autoFocus={noteOpen && !note}
           onChangeText={(t) => {
             setNote(t);
             updateTask(task.id, { note: t.trim() || null });
           }}
           placeholder="How did it go?"
         />
-      )}
+      ) : (
+        <Button variant="tertiary" small full={false} icon="plus" style={{ alignSelf: 'center' }} onPress={() => setNoteOpen(true)}>
+          Add a note
+        </Button>
+      ))}
 
     </Screen>
   );

@@ -165,7 +165,14 @@ export async function startSync() {
     useStore.setState({ syncStatus: 'local' });
     return;
   }
-  const userId = await ensureSession();
+  // A failed first sign-in shouldn't leave the whole visit offline: retry a few times.
+  let userId = await ensureSession();
+  for (const wait of [3_000, 10_000, 30_000]) {
+    if (userId) break;
+    useStore.setState({ syncStatus: 'offline' });
+    await new Promise((r) => setTimeout(r, wait));
+    userId = await ensureSession();
+  }
   if (!userId) {
     useStore.setState({ syncStatus: 'offline' });
     return;

@@ -32,6 +32,7 @@ import { addPromise, addTodo, completeTask, decideSkip, deleteTask, logFreeform,
 import { checkinOf, hobbiesOf, openTasks, skipSuggestionOf } from '@/data/selectors';
 import { alive, put, remove, showToast, useStore } from '@/data/store';
 import type { ChatMessage, RustyNote, RustySuggestion } from '@/data/types';
+import { useAiHealth } from '@/lib/health';
 import { now, resolveWhen } from '@/lib/time';
 import { rustyBus } from '@/rusty/brain';
 import { forgetNote, noticedOf, remember, restoreNote } from '@/rusty/knows';
@@ -90,6 +91,8 @@ export default function Chat() {
   const [learned, setLearned] = useState<Record<string, RustyNote[]>>({});
   /** what each reply did (logged a step, added a to-do…), shown under it */
   const [actions, setActions] = useState<Record<string, Action>>({});
+  /** replies that came from his offline words (the AI wasn't reachable) */
+  const [offlineIds, setOfflineIds] = useState<Record<string, true>>({});
   /** Rusty just asked "which hobby?" → the next message names it */
   const [expect, setExpect] = useState<'new_hobby' | undefined>();
   const greeted = useRef(false);
@@ -173,6 +176,7 @@ export default function Chat() {
     setExpect(undefined);
     setThinking(false);
     const msg = put('messages', { role: 'rusty', text: res.reply, suggestion: res.suggestion, createdAt: now() });
+    if (res.offline) setOfflineIds((o) => ({ ...o, [msg.id]: true }));
     const notes = remember(res.remember);
     if (notes.length) setLearned((l) => ({ ...l, [msg.id]: notes }));
     const a = act(res);
@@ -234,6 +238,7 @@ export default function Chat() {
         {recent.map((m) => (
           <Animated.View key={m.id} entering={FadeInUp.duration(200)} style={m.role === 'user' ? { alignItems: 'flex-end' } : undefined}>
             <Bubble from={m.role === 'rusty' ? 'rusty' : 'user'}>{m.text}</Bubble>
+            {offlineIds[m.id] && <OfflineNote />}
             {learned[m.id] && <Learned notes={learned[m.id]} />}
             {actions[m.id] && (
               <ActionCard
@@ -498,6 +503,17 @@ function ActionCard({
         )
       )}
     </Card>
+  );
+}
+
+/** Says so when a reply is his offline words, and why (instead of just seeming "dumb"). */
+function OfflineNote() {
+  const health = useAiHealth((s) => s.health);
+  const why = health.state === 'offline' ? health.reason : 'his AI isn’t reachable right now';
+  return (
+    <Button small full={false} variant="tertiary" style={{ marginLeft: 44, alignSelf: 'flex-start' }} onPress={() => router.push('/settings')}>
+      {`Offline reply: ${why}. Details ›`}
+    </Button>
   );
 }
 

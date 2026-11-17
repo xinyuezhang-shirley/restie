@@ -32,7 +32,7 @@ import { colors, fonts, shadows, space } from '@/theme/tokens';
 import { remeasureTarget, tutorialEvent, useTutorialTarget } from '@/tutorial/tutorial';
 import { useSky, type Condition, type Phase } from '@/world/world';
 
-import { BED, BED_RIM, BOARD, CLOCK, DOOR, FRAME_SLOTS, FRAMES_AREA, GLASS, HOME_ORDER, HOMES, IMG, NOTES, OBJECT_ASPECT } from './layout';
+import { BED, BED_RIM, BOARD, CLOCK, DOOR, FRAME_SLOTS, FRAMES, FRAMES_AREA, GLASS, HOME_ORDER, HOMES, IMG, NOTES, OBJECT_ASPECT } from './layout';
 import { BED_RIM_DAY, BED_RIM_NIGHT, OBJECTS, ROOM_DAY, ROOM_NIGHT } from './objects';
 import { lightFor, NIGHT, roomWash, StormFlash, SunPatch, WindowView } from './Sky';
 
@@ -97,6 +97,7 @@ export function Room(p: Props) {
   const inUse: Partial<Record<HobbyIcon, boolean>> = { drawing: p.brain.base === 'paint', baking: p.brain.base === 'cook' };
   const wash = roomWash(phase, condition);
   const otherUrl = useArtUrl(p.otherArt);
+  const light = lightFor(phase, condition);
 
   const roomRef = useRef<ComponentRef<typeof View>>(null);
   // Where you sent him: a paw print that fades when he gets going.
@@ -158,7 +159,14 @@ export function Room(p: Props) {
       {/* his bed: tap for a nap */}
       <Hotspot style={box(k, BED.x, BED.y, BED.w, BED.h)} a11y="Rusty's bed: send him for a nap" onPress={() => p.brain.goToBed()} />
 
-      {/* pinned keepsakes in the wall frames */}
+      {/* the keepsake frames: bigger than the painted ones (which they cover),
+          lit like the room, with a soft glow so they read as tappable */}
+      {FRAMES.map((f, i) => (
+        <View key={`frame-${i}`} pointerEvents="none" style={[box(k, f.x, f.y, f.w, f.h), styles.frame, { borderWidth: 5 * k }, light ? { filter: light } : null]}>
+          <View style={[styles.frameMat, { margin: 2 * k }]} />
+        </View>
+      ))}
+      {/* pinned keepsakes in the frames */}
       {p.pinned.slice(0, 3).map((ks, i) => {
         const f = FRAME_SLOTS[i];
         return (
@@ -171,7 +179,7 @@ export function Room(p: Props) {
               tap();
               router.push(`/keepsake/${ks.id}`);
             }}
-            style={[box(k, f.x, f.y, f.w, f.h), { backgroundColor: '#FFF7E7', padding: 2 * k, zIndex: 4 }]}
+            style={[box(k, f.x, f.y, f.w, f.h), { backgroundColor: '#FFF7E7', padding: 2 * k, zIndex: 4 }, light ? { filter: light } : null]}
           >
             <KeepsakeImage keepsake={ks} style={{ width: '100%', height: '100%' }} />
           </Pressable>
@@ -205,7 +213,7 @@ export function Room(p: Props) {
         a11y="Window: ask Rusty about the weather"
         onPress={() => p.brain.say(pick(lines.weather[condition]))}
       />
-      <Hotspot target={clockTarget} style={box(k, CLOCK.x, CLOCK.y, CLOCK.w, CLOCK.h)} label="Focus" a11y="Clock: start a focus timer with Rusty" onPress={p.onClock} round />
+      <Hotspot target={clockTarget} style={box(k, CLOCK.x, CLOCK.y, CLOCK.w, CLOCK.h)} label="Focus" a11y="Clock: start a focus timer with Rusty" onPress={p.onClock} round glow />
       <Hotspot
         target={framesTarget}
         style={box(k, FRAMES_AREA.x, FRAMES_AREA.y, FRAMES_AREA.w, FRAMES_AREA.h)}
@@ -516,9 +524,12 @@ function Hotspot({
   onPress,
   target,
   round,
+  glow,
 }: {
   style: object;
   label?: string;
+  /** a dim, warm halo so it reads as something you can tap (clock, frames) */
+  glow?: boolean;
   /** every tappable thing gets the same small label: under it, or inside at the top/bottom */
   labelAt?: 'below' | 'top' | 'bottom';
   a11y: string;
@@ -538,7 +549,7 @@ function Hotspot({
         tap();
         onPress();
       }}
-      style={({ pressed }) => [style, { zIndex: 3, borderRadius: round ? 999 : 12 }, pressed && { backgroundColor: 'rgba(255,255,255,0.22)' }]}
+      style={({ pressed }) => [style, { zIndex: 3, borderRadius: round ? 999 : 12 }, glow && styles.glow, pressed && { backgroundColor: 'rgba(255,255,255,0.22)' }]}
     >
       {label ? (
         <View style={[styles.hotLabelWrap, place]} pointerEvents="none">
@@ -648,6 +659,28 @@ function SpeechBubble({
 }
 
 const styles = StyleSheet.create({
+  // wood frame with a soft warm halo around it: reads as "tap me" without a box
+  frame: {
+    position: 'absolute',
+    borderColor: '#B98250',
+    backgroundColor: '#C99460',
+    borderRadius: 3,
+    shadowColor: '#FFC978',
+    shadowOpacity: 0.75,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  frameMat: { flex: 1, backgroundColor: '#F4E6CF', borderWidth: 1, borderColor: 'rgba(110,70,35,0.35)' },
+  // dim warm halo + a faint light edge: "this is a thing you can tap"
+  glow: {
+    backgroundColor: 'rgba(255,246,226,0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.35)',
+    shadowColor: '#FFD89A',
+    shadowOpacity: 0.85,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 0 },
+  },
   zee: { position: 'absolute', left: 0, top: 0, fontFamily: fonts.heading, color: '#4F6F9A', textShadowColor: 'rgba(255,255,255,0.95)', textShadowRadius: 4 },
   mark: {
     position: 'absolute',

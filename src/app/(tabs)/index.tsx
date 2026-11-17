@@ -116,23 +116,26 @@ export default function Home() {
           <Row style={{ justifyContent: 'space-between' }}>
             <View style={{ gap: space.xs }}>
               <T v="title2">Up next</T>
-              <Row gap={space.md}>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`See all plans and to-dos, ${upNext.length}`}
-                  onPress={() => router.navigate('/todos')}
-                  hitSlop={8}
-                >
-                  <T v="caption" color={colors.actionText}>
-                    {upNext.length > 2 ? `See all ${upNext.length} ›` : 'See all ›'}
-                  </T>
-                </Pressable>
-                <Pressable accessibilityRole="button" accessibilityLabel="Make a paw promise" onPress={() => router.push('/promise')} hitSlop={8}>
-                  <T v="caption" color={colors.actionText}>
-                    + Promise
-                  </T>
-                </Pressable>
-              </Row>
+              {/* nothing up next: no links here, the one action is below (no duplicate "+ Promise") */}
+              {upNext.length > 0 && (
+                <Row gap={space.md}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`See all plans and to-dos, ${upNext.length}`}
+                    onPress={() => router.navigate('/todos')}
+                    hitSlop={8}
+                  >
+                    <T v="caption" color={colors.actionText}>
+                      {upNext.length > 2 ? `See all ${upNext.length} ›` : 'See all ›'}
+                    </T>
+                  </Pressable>
+                  <Pressable accessibilityRole="button" accessibilityLabel="Make a paw promise" onPress={() => router.push('/promise')} hitSlop={8}>
+                    <T v="caption" color={colors.actionText}>
+                      + Promise
+                    </T>
+                  </Pressable>
+                </Row>
+              )}
             </View>
             <Pressable
               ref={logRef}
@@ -153,9 +156,14 @@ export default function Home() {
           </Row>
           <View style={{ marginTop: space.sm }}>
             {upNext.length === 0 ? (
-              <Chip onPress={() => router.push(hobbies.length ? '/hobbies' : '/new-hobby')}>
-                {hobbies.length ? '+ Promise a step' : '+ Start a hobby with Rusty'}
-              </Chip>
+              <View style={{ gap: space.sm }}>
+                <T v="callout" color={colors.inkSoft}>
+                  {hobbies.length ? 'Nothing up next. Rest counts too.' : 'No hobbies yet. Rusty can help you pick one.'}
+                </T>
+                <Chip onPress={() => router.push(hobbies.length ? '/promise' : '/new-hobby')}>
+                  {hobbies.length ? '+ Promise a step' : '+ Start a hobby with Rusty'}
+                </Chip>
+              </View>
             ) : (
               upNext.slice(0, 2).map((u, i) => <UpNextRow key={u.task.id} item={u} first={i === 0} />)
             )}
